@@ -2,7 +2,10 @@ import pysam
 from pyfaidx import Fasta
 import logging
 import numpy as np
+import re
+import pickle
 
+log = logging.getLogger(__name__)
 
 def getChrs(inBam):
     chrs = np.array([x['SN'] for x in inBam.header['SQ']])
@@ -17,12 +20,25 @@ def getChrs(inBam):
             break
     return (reqchrs, reqchrslen, int(np.nanmean(binLen)))
 
+def parseContext(tair10, cid, pos):
+    try:
+        dnastring = tair10[cid][pos:pos+3].seq.encode('ascii')
+    except:
+        return None
+    if dnastring[1].upper() == 'G':
+        return "CG"
+    elif dnastring[2].upper() == 'G':
+        return "CHG"
+    else:
+        return "CHH"
+
 def decodeFlag(flag):
     bintag = str(int(bin(flag)[2:]))[::-1]
     notag = (12 - len(bintag)) * '0'
     return bintag + notag
 
-def getMethRead(refseq, rseq, strand):
+def getMethRead(reqcontext, tair10, cid, bins, refseq, rseq, strand):
+    error_rate = 0.01
     if strand == '0': ## Forward read, count the number of C's
         context = "C"
         reqstr = "T"
@@ -33,23 +49,29 @@ def getMethRead(refseq, rseq, strand):
         return "check the strings!"
     mc, mt = 0, 0
     for i,c in enumerate(refseq):
-        if c.upper() == context:
+        methcontext = parseContext(tair10, cid, bins + i)
+        if c.upper() == context: # and methcontext == reqcontext:
             if rseq[i].upper() == context:
                 mc += 1
                 mt += 1
             elif rseq[i].upper() == reqstr:
                 mt += 1
-    return float(mc)/mt
+    if mt > 5:
+        return mc, mt, float(mc)/mt
+    else:
+        return mc, mt, np.nan
 
-def getMethWind(bamFile, fastaFile):
+def getMethWind(bamFile, fastaFile, outFile):
     ## input a bam file, bin length
     ## make sure the binLen is less than the read length
     seqthres = 20 ## minimum overlap within the window to get the required
     inBam = pysam.AlignmentFile(bamFile, "rb")
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
+    #out = open(outFile, 'w')
     meths = {}
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
+        log.info("analysing chromosome: %s" % cid)
         meths[cid] = {}
         for bins in range(0, clen, binLen):        ## sliding windows with binLen
             binmeth = np.zeros(0)
@@ -57,9 +79,15 @@ def getMethWind(bamFile, fastaFile):
                 rflag = decodeFlag(binread.flag)
                 rind = np.where(np.in1d(np.array(binread.get_reference_positions()), np.array(range(bins,bins + binLen))))[0]
                 refseq = tair10[cid][binread.reference_start:binread.reference_end].seq.encode('ascii')
-                if len(rind) > seqthres and rflag[10] == 0 and rflag[8] == 0: ## removing the duplicates
-                    rmeth = getMethRead(refseq[rind[0]:rind[-1]], binread.seq[rind[0]:rind[-1]], rflag[4]) ## taking the first and last
-                    binmeth = np.append(binmeth, rmeth)
-            meths[cid][bins] = np.nanmean(binmeth)
-            log.info
-    return meths
+                if len(rind) > seqthres and rflag[10] == '0' and rflag[8] == '0': ## removing the duplicates
+                    mc, mt, rmeth = getMethRead("CHG", tair10, cid, bins, refseq[rind[0]:rind[-1]], binread.seq[rind[0]:rind[-1]], rflag[4]) ## taking the first and last
+                    if not np.isnan(rmeth):
+                        binmeth = np.append(binmeth, rmeth)
+            meths[cid][bins] = binmeth
+            #out.write("%s\t%s\t%s\t%s\t%s\n" % (cid, bins + 1, bins + binLen, np.nanmean(binmeth), len(binmeth)))
+#    out.close()
+    with open(outFile, 'wb') as fp:
+        pickle.dump(meths, fp)
+#    return #meths
+
+#def getMethReads(bamFile, fastaFile, outFile):

@@ -41,6 +41,7 @@ def get_options(program_license,program_version_message):
   methbam.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   methbam.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
   methbam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
+  methbam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   methbam.set_defaults(func=bshap_methbam)
   return inOptions
 

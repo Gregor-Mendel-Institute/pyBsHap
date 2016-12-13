@@ -23,7 +23,7 @@ setup(
         'Topic :: Scientific/Engineering :: Bio-Informatics',
         'Programming Language :: Python :: 3.4',
     ],
-    keywords='Genotyping Low Coverage sequencing data',
+    keywords='bisulfite sequencing',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=[
         "numpy >=1.9.0",
