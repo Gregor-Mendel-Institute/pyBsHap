@@ -1,10 +1,11 @@
 import sys
 import logging
 import argparse
+import os
 
-sys.path.append("/home/GMI/rahul.pisupati/pyBsHap/bshap/core")
-sys.path.append("/home/GMI/rahul.pisupati/pyBsHap/bshap/")
 
+scriptpath = os.path.dirname(sys.argv[0])
+sys.path.append(os.path.join(os.path.abspath(scriptpath), "../bshap/core"))
 
 def setLog(logDebug):
   log = logging.getLogger()
