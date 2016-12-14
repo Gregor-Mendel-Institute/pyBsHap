@@ -3,7 +3,7 @@ from pyfaidx import Fasta
 import logging
 import numpy as np
 import re
-import pickle
+import json
 
 log = logging.getLogger(__name__)
 
@@ -68,13 +68,14 @@ def getMethWind(bamFile, fastaFile, outFile):
     inBam = pysam.AlignmentFile(bamFile, "rb")
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
-    #out = open(outFile, 'w')
     meths = {}
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         meths[cid] = {}
         for bins in range(0, clen, binLen):        ## sliding windows with binLen
             binmeth = np.zeros(0)
+            binmc = np.zeros(0)
+            binmt = np.zeros(0)
             for binread in inBam.fetch(cid, bins, bins + binLen):
                 rflag = decodeFlag(binread.flag)
                 rind = np.where(np.in1d(np.array(binread.get_reference_positions()), np.array(range(bins,bins + binLen))))[0]
@@ -83,11 +84,10 @@ def getMethWind(bamFile, fastaFile, outFile):
                     mc, mt, rmeth = getMethRead("CHG", tair10, cid, bins, refseq[rind[0]:rind[-1]], binread.seq[rind[0]:rind[-1]], rflag[4]) ## taking the first and last
                     if not np.isnan(rmeth):
                         binmeth = np.append(binmeth, rmeth)
-            meths[cid][bins] = binmeth
-            #out.write("%s\t%s\t%s\t%s\t%s\n" % (cid, bins + 1, bins + binLen, np.nanmean(binmeth), len(binmeth)))
-#    out.close()
+                        binmc = np.append(binmc, mc)
+                        binmt = np.append(binmt, mt)
+            meths[cid][bins+1] = binmeth.tolist()
     with open(outFile, 'wb') as fp:
-        pickle.dump(meths, fp)
-#    return #meths
+        fp.write(json.dumps(meths))
 
 #def getMethReads(bamFile, fastaFile, outFile):
