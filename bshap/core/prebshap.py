@@ -69,6 +69,9 @@ def getMethWind(bamFile, fastaFile, outFile):
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
     meths = {}
+    meths["chrs"] = chrs
+    meths["binlen"] = binLen
+    meths["chrslen"] = chrslen
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         meths[cid] = {}
