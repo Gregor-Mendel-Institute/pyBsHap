@@ -40,6 +40,7 @@ def get_options(program_license,program_version_message):
   methbam = subparsers.add_parser('getmeth', help="pyBsHap on the bam files")
   methbam.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   methbam.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
+  methbam.add_argument("-c", "--reqContext", dest="reqcontext", help="context to be checked, possible options CG, CHG, CHH or CN", default='CN')
   methbam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
   methbam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   methbam.set_defaults(func=bshap_methbam)
@@ -57,7 +58,7 @@ def checkARGs(args):
 
 def bshap_methbam(args):
   checkARGs(args)
-  prebshap.getMethWind(args['inFile'], args['fastaFile'])
+  prebshap.getMethWind(args['inFile'], args['fastaFile'], args['reqcontext'], args['outFile'])
 
 def main():
   ''' Command line options '''

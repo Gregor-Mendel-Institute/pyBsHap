@@ -50,7 +50,10 @@ def getMethRead(reqcontext, tair10, cid, bins, refseq, rseq, strand):
     mc, mt = 0, 0
     for i,c in enumerate(refseq):
         methcontext = parseContext(tair10, cid, bins + i)
-        if c.upper() == context: # and methcontext == reqcontext:
+        checkcontext = reqcontext == methcontext
+        if reqcontext == 'CN':
+            checkcontext = True
+        if c.upper() == context and checkcontext:
             if rseq[i].upper() == context:
                 mc += 1
                 mt += 1
@@ -61,7 +64,7 @@ def getMethRead(reqcontext, tair10, cid, bins, refseq, rseq, strand):
     else:
         return mc, mt, np.nan
 
-def getMethWind(bamFile, fastaFile, outFile):
+def getMethWind(bamFile, fastaFile, reqcontext, outFile):
     ## input a bam file, bin length
     ## make sure the binLen is less than the read length
     seqthres = 20 ## minimum overlap within the window to get the required
@@ -84,7 +87,7 @@ def getMethWind(bamFile, fastaFile, outFile):
                 rind = np.where(np.in1d(np.array(binread.get_reference_positions()), np.array(range(bins,bins + binLen))))[0]
                 refseq = tair10[cid][binread.reference_start:binread.reference_end].seq.encode('ascii')
                 if len(rind) > seqthres and rflag[10] == '0' and rflag[8] == '0': ## removing the duplicates
-                    mc, mt, rmeth = getMethRead("CHG", tair10, cid, bins, refseq[rind[0]:rind[-1]], binread.seq[rind[0]:rind[-1]], rflag[4]) ## taking the first and last
+                    mc, mt, rmeth = getMethRead(reqcontext, tair10, cid, bins, refseq[rind[0]:rind[-1]], binread.seq[rind[0]:rind[-1]], rflag[4]) ## taking the first and last
                     if not np.isnan(rmeth):
                         binmeth = np.append(binmeth, rmeth)
                         binmc = np.append(binmc, mc)
