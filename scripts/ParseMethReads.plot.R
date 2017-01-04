@@ -15,11 +15,16 @@ colors.plot <- brewer.pal(5, "Paired")[c(1,2,1,2,1)]
 json.file <- "/lustre/scratch/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516164/meths.SRR516164.bins.json"
 json.file <- "/lustre/scratch/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516175/meths.SRR516175.json"
 json.file <- "/lustre/scratch/projects/cegs/rahul/008.Col-0.Bis/02.methylpy/meths.SRR771698.json"
-json.file <- "/lustre/scratch/projects/cegs/rahul/008.Col-0.Bis/02.methylpy/meths.SRR771698.CG.json"
+json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CN.json"
+json.file.cg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CG.json"
+json.file.chg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CHG.json"
+json.file.chh <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CHH.json"
 
 meths <- fromJSON(json.file)
 meths.sperm <- fromJSON(json.file)
-meths.cg <- fromJSON(json.file)
+meths.cg <- fromJSON(json.file.cg)
+meths.chg <- fromJSON(json.file.chg)
+meths.chh <- fromJSON(json.file.chh)
 
 
 ## Histogram for methylation in reads
@@ -85,7 +90,7 @@ meth.region.plot <- function(check.gr,meths, updown = 1000){
   #chrom.mat <- chrom.mat[,order(as.numeric(colnames(chrom.mat)))]
   rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T))
   meth.colors <- brewer.pal(nrow(chrom.mat), "Spectral")[nrow(chrom.mat):1]
-  par(resetPar())
+  #par(resetPar())
   cex.plot <- 1.5
   barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "))
   #mtext(side = 1, text = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), line = 5, cex = cex.plot)
@@ -93,25 +98,36 @@ meth.region.plot <- function(check.gr,meths, updown = 1000){
   axis(1, at = as.integer(updown/meths$binlen), labels = "start", lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)) - as.integer(updown/meths$binlen), labels = "end", lwd.ticks = 5, line =0.5)
-  par(fig=c(0.8,0.93,0.8,0.83), new=T)
-  par(mar=c(0,0,0,0))
-  ylim <- length(meth.breaks) - 1
-  plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
-  axis(1, at=c(0, ylim/2, ylim), labels=c(0, 0.5, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
-  mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
-  for(z in seq(ylim)){
-    rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
-  }
-  par(resetPar())
+#   par(fig=c(0.8,0.93,0.8,0.83), new=T)
+#   par(mar=c(0,0,0,0))
+#   ylim <- length(meth.breaks) - 1
+#   plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
+#   axis(1, at=c(0, ylim/2, ylim), labels=c(0, 0.5, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
+#   mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
+#   for(z in seq(ylim)){
+#     rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
+#   }
+  #par(resetPar())
 }
 
 
 #check.pos <- as.numeric(getupdown.araport(ara.ind, aradf = araport.tes))
-ara.ind <- 5
+ara.ind <- 161
+ara.ind <- 106
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths, updown = 2000)
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.sperm, updown = 2000)
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cg, updown = 2000)
 araport.gff[ara.ind]
 
 start(araport.gff[ara.ind]) - 2000
+
+
+
+meth.region.plot(check.gr = GRanges("Chr1", IRanges(11705950,11724300)), meths = meths, updown = 2000)
+
+
+zones=matrix(c(1,2,3,4), ncol=1, byrow=T)
+layout(zones)
+meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths, updown = 2000)
+meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.chh, updown = 2000)
 
