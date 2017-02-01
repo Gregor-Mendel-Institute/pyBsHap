@@ -64,7 +64,7 @@ def getMethRead(reqcontext, tair10, cid, bins, refseq, rseq, strand):
     else:
         return mc, mt, np.nan
 
-def getMethWind(bamFile, fastaFile, reqcontext, outFile):
+def getMethWind(bamFile, fastaFile, outFile, reqcontext = "CN"):
     ## input a bam file, bin length
     ## make sure the binLen is less than the read length
     seqthres = 20 ## minimum overlap within the window to get the required

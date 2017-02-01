@@ -51,14 +51,16 @@ def checkARGs(args):
         die("input file not specified")
     if not args['fastaFile']:
         die("fasta file not specified")
+    if not args['outFile']:
+        die("output file not specified")
     if not os.path.isfile(args['fastaFile']):
-        die("hdf5_file does not exist: " + args['fastaFile'])
+        die("fasta file does not exist: " + args['fastaFile'])
     if not os.path.isfile(args['inFile']):
         die("input file does not exist: " + args['inFile'])
 
 def bshap_methbam(args):
   checkARGs(args)
-  prebshap.getMethWind(args['inFile'], args['fastaFile'], args['reqcontext'], args['outFile'])
+  prebshap.getMethWind(args['inFile'], args['fastaFile'], args['outFile'], args['reqcontext'])
 
 def main():
   ''' Command line options '''
