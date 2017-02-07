@@ -40,6 +40,7 @@ def get_options(program_license,program_version_message):
   methbam = subparsers.add_parser('getmeth', help="pyBsHap on the bam files")
   methbam.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   methbam.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
+  methbam.add_argument("-s", "--specificRegion", dest="reqRegion", help="region to be checked, Ex. Chr1,1,100,33 --- position 33 is to point in the reads that are printed", default = '0,0,0,0')
   methbam.add_argument("-c", "--reqContext", dest="reqcontext", help="context to be checked, possible options CG, CHG, CHH or CN", default='CN')
   methbam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
   methbam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
@@ -59,8 +60,8 @@ def checkARGs(args):
         die("input file does not exist: " + args['inFile'])
 
 def bshap_methbam(args):
-  checkARGs(args)
-  prebshap.getMethWind(args['inFile'], args['fastaFile'], args['outFile'], args['reqcontext'])
+    checkARGs(args)
+    prebshap.getMethGenome(args['inFile'], args['fastaFile'], args['outFile'], args['reqcontext'], args['reqRegion'])
 
 def main():
   ''' Command line options '''

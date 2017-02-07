@@ -62,34 +62,35 @@ def decodeFlag(flag):
 
 def getHighlightedSeqs(refseq, rseq, strand):
     if strand == '0': ## forward, let C's stay
-        fin_refseq = re.sub('A|T', '.', refseq.upper()).lower()
-        re_string = ['C','T']
+        re_string = ['C','T','.']
     elif strand == '1':  ## G's should stay
-        fin_refseq = re.sub('A|T', ',', refseq.upper()).lower()
-        re_string = ['G', 'A']
+        re_string = ['G', 'A',',']
+    fin_refseq = re.sub('A|T', re_string[2], refseq.upper()).lower()
     fin_refseq = re.sub(re_string[0].lower(), re_string[0], fin_refseq)
     fin_rseq = rseq
     for i,c in enumerate(refseq):
         if c.upper() != re_string[0]:
-            fin_rseq = fin_rseq[:i] + '.' + fin_rseq[i+1:]
+            fin_rseq = fin_rseq[:i] + re_string[2] + fin_rseq[i+1:]
     return fin_refseq, fin_rseq
 
-def printInterestingRegion(map_pos, refseq, rseq, strand, binmeth, interesting_region):
-    ## interesting_region = ['Chr1',30, 40, 33]
+def printInterestingRegion(tair10, binread, rmeth, pointPos=0):
+    ## pointPos = 290598
     ## map_pos = [cid, ref_pos_start, ref_pos_start_end]
-    if map_pos[0] == interesting_region[0] and map_pos[1] > interesting_region[1] and map_pos[1] < interesting_region[2]:
-        dot_refseq, dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
-        print("start:end:meth -- %s : %s : %s" % (map_pos[1], map_pos[2], binmeth))
-        if len(interesting_region) == 4:
-            if interesting_region[3] > map_pos[1] and interesting_region[3] < map_pos[2]:
-                point_len = interesting_region[3] - map_pos[1]
-                print("%s" % '.' * point_len + `interesting_region[3]`)
-        print("%s" % dot_refseq)
-        print("%s" % dot_rseq)
+    map_pos = [binread.reference_name, binread.reference_start, binread.reference_end]
+    strand = decodeFlag(binread.flag)[4]
+    refseq = tair10[map_pos[0]][map_pos[1]:map_pos[2]].seq.encode('ascii')
+    rseq = binread.seq
+    dot_refseq, dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
+    print("start:end:meth -- %s: %s - %s : %s" % (map_pos[0], map_pos[1], map_pos[2], rmeth))
+    if pointPos < map_pos[2] and pointPos > map_pos[1]:
+        point_len = pointPos - map_pos[1]
+        print("%s" % '.' * point_len + `pointPos`)
+    print("%s" % dot_refseq)
+    print("%s" % dot_rseq)
 
-def getMethRead(reqcontext, tair10, ref_bed, binread):
-    (cid, ref_pos, ref_pos_end) = ref_bed
-    refseq = tair10[cid][ref_pos:ref_pos_end].seq.encode('ascii')
+def getMethRead(reqcontext, tair10, binread):
+    map_pos = [binread.reference_name, binread.reference_start, binread.reference_end]
+    refseq = tair10[map_pos[0]][map_pos[1]:map_pos[2]].seq.encode('ascii')
     rseq = binread.seq
     strand = decodeFlag(binread.flag)[4]
     error_rate = 0.01
@@ -105,7 +106,7 @@ def getMethRead(reqcontext, tair10, ref_bed, binread):
     for i,c in enumerate(refseq):
         read_length = read_length + 1
         if c.upper() == context:
-            (dnastring, methcontext) = parseContext(tair10, cid, ref_pos + i, strand)
+            (dnastring, methcontext) = parseContext(tair10, map_pos[0], map_pos[1] + i, strand)
             checkcontext = reqcontext == methcontext
             if reqcontext == 'CN':
                 checkcontext = True
@@ -114,44 +115,60 @@ def getMethRead(reqcontext, tair10, ref_bed, binread):
                 if rseq[i].upper() == context:
                     mc += 1
     #log.debug("%s:%s:%s:%s" % (ref_pos,mc, mt, read_length))
-    interesting_region = ['Chr1',290350, 291203, 290615]  ## chr1 -> 0
-    if mt > 1:
-        #printInterestingRegion(ref_bed, refseq, rseq, strand, float(mc)/mt, interesting_region)
+    if mt >= 1:
         return mc, mt, float(mc)/mt
     else:
         return mc, mt, -1   ### We need to differentiate between the reads which are small and has no methylation
 
+def getMethWind(inBam, tair10, bin_bed, reqcontext = 'CN'):
+    # bin_bed = ['Chr1', start, end, binLen, pointPos]
+    binLen = bin_bed[3]
+    read_length_thres = binLen/2
+    meths = {}
+    for bins in range(bin_bed[1], bin_bed[2], binLen):        ## sliding windows with binLen
+        binmeth = np.zeros(0)
+        binmc = np.zeros(0)
+        binmt = np.zeros(0)
+        for binread in inBam.fetch(bin_bed[0], bins, bins + binLen):
+            rflag = decodeFlag(binread.flag)
+            intersect_bed = findIntersectbed([bins, bins + binLen], [binread.reference_start, binread.reference_end])
+            intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
+            if intersect_len > read_length_thres and rflag[10] == '0' and rflag[8] == '0': ## removing the duplicates
+                ## The start of the read is binread.reference_start
+                mc, mt, rmeth = getMethRead(reqcontext, tair10, binread) ## taking the first and last
+                if not np.isnan(rmeth):
+                    binmeth = np.append(binmeth, rmeth)
+                    binmc = np.append(binmc, mc)
+                    binmt = np.append(binmt, mt)
+                    if bin_bed[4] != 0:
+                        printInterestingRegion(tair10, binread, rmeth, bin_bed[4])
+        meths[bins+1] = binmeth.tolist()
+    return meths
 
-def getMethWind(bamFile, fastaFile, outFile, reqcontext = "CN"):
+def getMethGenome(bamFile, fastaFile, outFile, reqcontext = "CN", interesting_region='0,0,0'):
     ## input a bam file, bin length
     ## make sure the binLen is less than the read length
     inBam = pysam.AlignmentFile(bamFile, "rb")
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
-    meths = {}
-    meths["chrs"] = chrs
-    meths["binlen"] = binLen
-    meths["chrslen"] = chrslen
-    read_length_thres = binLen/2
-    for cid, clen in zip(chrs, chrslen):     ## chromosome wise
-        log.info("analysing chromosome: %s" % cid)
-        meths[cid] = {}
-        for bins in range(0, clen, binLen):        ## sliding windows with binLen
-            binmeth = np.zeros(0)
-            binmc = np.zeros(0)
-            binmt = np.zeros(0)
-            for binread in inBam.fetch(cid, bins, bins + binLen):
-                rflag = decodeFlag(binread.flag)
-                intersect_bed = findIntersectbed([bins, bins + binLen], [binread.reference_start, binread.reference_end])
-                intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
-                if intersect_len > read_length_thres and rflag[10] == '0' and rflag[8] == '0': ## removing the duplicates
-                    ## The start of the read is binread.reference_start
-                    ref_bed = [cid, binread.reference_start, binread.reference_end]
-                    mc, mt, rmeth = getMethRead(reqcontext, tair10, ref_bed, binread) ## taking the first and last
-                    if not np.isnan(rmeth):
-                        binmeth = np.append(binmeth, rmeth)
-                        binmc = np.append(binmc, mc)
-                        binmt = np.append(binmt, mt)
-            meths[cid][bins+1] = binmeth.tolist()
-    with open(outFile, 'wb') as fp:
-        fp.write(json.dumps(meths))
+    if interesting_region == '0,0,0,0':
+        meths = {}
+        meths["chrs"] = chrs
+        meths["binlen"] = binLen
+        meths["chrslen"] = chrslen
+        for cid, clen in zip(chrs, chrslen):     ## chromosome wise
+            log.info("analysing chromosome: %s" % cid)
+            bin_bed = [cid, 0, clen, binLen, 0]   ### 0 is to not print reads
+            meths[cid] = getMethWind(inBam, tair10, bin_bed, reqcontext=reqcontext)
+        with open(outFile, 'wb') as fp:
+            fp.write(json.dumps(meths))
+    else:
+        meths = {}
+        bin_bed = interesting_region.split(',')
+        if len(bin_bed) == 3:
+            bin_bed = [bin_bed[0], int(bin_bed[1]), int(bin_bed[2]), binLen, 0]
+        else:
+            bin_bed = [bin_bed[0], int(bin_bed[1]), int(bin_bed[2]), binLen, int(bin_bed[3])]
+        meths[bin_bed[0]] = getMethWind(inBam, tair10, bin_bed, reqcontext)
+        with open(outFile, 'wb') as fp:
+            fp.write(json.dumps(meths))

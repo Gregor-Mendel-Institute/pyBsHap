@@ -92,14 +92,14 @@ araport.gff <- import.gff3("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.gen
 
 
 meth.region.plot <- function(check.gr,meths, updown = 1000){
-  num.rows <- 10
-  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
+  num.rows <- 9
+  meth.breaks <- seq(0, 1, length.out = num.rows)
   check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths$binlen), check.pos[3], meths$binlen))
   chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
   #chrom.mat <- chrom.mat[,order(as.numeric(colnames(chrom.mat)))]
   rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T))
-  meth.colors <-c("gray", brewer.pal(num.rows, "Spectral")[num.rows:1])
+  meth.colors <-brewer.pal(num.rows, "Spectral")[num.rows:1]
   par(resetPar())
   cex.plot <- 1.5
   barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "))
@@ -111,7 +111,7 @@ meth.region.plot <- function(check.gr,meths, updown = 1000){
    par(mar=c(0,0,0,0))
    ylim <- length(meth.breaks) - 1
    plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
-   axis(1, at=c(0, 0.2, ylim), labels=c("NA", 0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
+   axis(1, at=c(0, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
    mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
    for(z in seq(ylim)){
      rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
