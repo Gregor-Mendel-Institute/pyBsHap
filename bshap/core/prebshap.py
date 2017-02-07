@@ -101,7 +101,7 @@ def getMethRead(reqcontext, tair10, binread):
         context = "G"
         #reqstr = "A"   # if this is present the base is non methylated
     if len(refseq) != len(rseq):
-        return "check the strings!"
+        return 0, 0, None  ## Skips the reads with short indels
     mc, mt, read_length = 0, 0, 0
     for i,c in enumerate(refseq):
         read_length = read_length + 1
@@ -124,24 +124,32 @@ def getMethWind(inBam, tair10, bin_bed, reqcontext = 'CN'):
     # bin_bed = ['Chr1', start, end, binLen, pointPos]
     binLen = bin_bed[3]
     read_length_thres = binLen/2
+    bin_start = bin_bed[1] - (bin_bed[1] % binLen)
     meths = {}
-    for bins in range(bin_bed[1], bin_bed[2], binLen):        ## sliding windows with binLen
+    estimated_bins = (bin_bed[2] - bin_start) // binLen
+    progress_bins = 0
+    for bins in range(bin_start, bin_bed[2], binLen):        ## sliding windows with binLen
         binmeth = np.zeros(0)
         binmc = np.zeros(0)
         binmt = np.zeros(0)
+        progress_bins += 1
         for binread in inBam.fetch(bin_bed[0], bins, bins + binLen):
             rflag = decodeFlag(binread.flag)
+            if len(binread.get_aligned_pairs()) == 0:
+                continue        ## Skip the read if the alignment is not good ;)
             intersect_bed = findIntersectbed([bins, bins + binLen], [binread.reference_start, binread.reference_end])
             intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
             if intersect_len > read_length_thres and rflag[10] == '0' and rflag[8] == '0': ## removing the duplicates
                 ## The start of the read is binread.reference_start
-                mc, mt, rmeth = getMethRead(reqcontext, tair10, binread) ## taking the first and last
-                if not np.isnan(rmeth):
+                (mc, mt, rmeth) = getMethRead(reqcontext, tair10, binread) ## taking the first and last
+                if rmeth is not None:
                     binmeth = np.append(binmeth, rmeth)
                     binmc = np.append(binmc, mc)
                     binmt = np.append(binmt, mt)
                     if bin_bed[4] != 0:
                         printInterestingRegion(tair10, binread, rmeth, bin_bed[4])
+        if progress_bins % 1000 == 0:
+            log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
         meths[bins+1] = binmeth.tolist()
     return meths
 
@@ -151,24 +159,22 @@ def getMethGenome(bamFile, fastaFile, outFile, reqcontext = "CN", interesting_re
     inBam = pysam.AlignmentFile(bamFile, "rb")
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
+    meths = {}
+    meths["input_bam"] = bamFile
+    meths["chrs"] = chrs
+    meths["binlen"] = binLen
+    meths["chrslen"] = chrslen
     if interesting_region == '0,0,0,0':
-        meths = {}
-        meths["chrs"] = chrs
-        meths["binlen"] = binLen
-        meths["chrslen"] = chrslen
         for cid, clen in zip(chrs, chrslen):     ## chromosome wise
             log.info("analysing chromosome: %s" % cid)
             bin_bed = [cid, 0, clen, binLen, 0]   ### 0 is to not print reads
             meths[cid] = getMethWind(inBam, tair10, bin_bed, reqcontext=reqcontext)
-        with open(outFile, 'wb') as fp:
-            fp.write(json.dumps(meths))
     else:
-        meths = {}
         bin_bed = interesting_region.split(',')
         if len(bin_bed) == 3:
             bin_bed = [bin_bed[0], int(bin_bed[1]), int(bin_bed[2]), binLen, 0]
         else:
             bin_bed = [bin_bed[0], int(bin_bed[1]), int(bin_bed[2]), binLen, int(bin_bed[3])]
         meths[bin_bed[0]] = getMethWind(inBam, tair10, bin_bed, reqcontext)
-        with open(outFile, 'wb') as fp:
-            fp.write(json.dumps(meths))
+    with open(outFile, 'wb') as fp:
+        fp.write(json.dumps(meths))
