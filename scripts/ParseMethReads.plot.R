@@ -16,9 +16,10 @@ json.file <- "/lustre/scratch/projects/cegs/rahul/006.SpermAndVegetativeCells/00
 json.file <- "/lustre/scratch/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516175/meths.SRR516175.json"
 json.file <- "/lustre/scratch/projects/cegs/rahul/008.Col-0.Bis/02.methylpy/meths.SRR771698.json"
 json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CN.json"
-json.file.cg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CG.json"
-json.file.chg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CHG.json"
-json.file.chh <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CHH.json"
+json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CN.json"
+json.file.cg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CG.json"
+json.file.chg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CHG.json"
+json.file.chh <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CHH.json"
 
 meths <- fromJSON(json.file)
 meths.sperm <- fromJSON(json.file)
@@ -26,7 +27,7 @@ meths.cg <- fromJSON(json.file.cg)
 meths.chg <- fromJSON(json.file.chg)
 meths.chh <- fromJSON(json.file.chh)
 
-json.file <- c("/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/methReads/", "SRR3311826")
+json.file <- c("/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/", "SRR3311820")
 meths.cn <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CN.json", sep = "")))
 meths.cg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CG.json", sep = "")))
 meths.chg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHG.json", sep = "")))
@@ -39,6 +40,7 @@ meths.chh <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CH
 ## 
 meth.calls <- c(as.numeric(as.character(meths$Chr1)), as.numeric(as.character(meths$Chr2)), as.numeric(as.character(meths$Chr3)), as.numeric(as.character(meths$Chr4)), as.numeric(as.character(meths$Chr5)))
 meth.calls <- meth.calls[!is.na(meth.calls)]
+meth.calls <- meth.calls[which(meth.calls != -1)]
 hist.meth <- hist(meth.calls, plot = F, breaks = 50)
 hist.meth$density <- hist.meth$counts/sum(hist.meth$counts)
 meth.density <- density(meth.calls, from = 0, to = 1)
@@ -91,18 +93,18 @@ check.pos <- c(1,3779235,3787293) ## TE gene, 1kb up and down, AT1G11265
 araport.gff <- import.gff3("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
 
 
-meth.region.plot <- function(check.gr,meths, updown = 1000){
-  num.rows <- 9
-  meth.breaks <- seq(0, 1, length.out = num.rows)
+meth.region.plot <- function(check.gr,meths, updown = 2000){
+  num.rows <- 10
+  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths$binlen), check.pos[3], meths$binlen))
-  chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
+  chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
   #chrom.mat <- chrom.mat[,order(as.numeric(colnames(chrom.mat)))]
-  rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T))
-  meth.colors <-brewer.pal(num.rows, "Spectral")[num.rows:1]
+  rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   par(resetPar())
   cex.plot <- 1.5
-  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "))
+  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", meths$input_bam))
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = as.integer(updown/meths$binlen), labels = "start", lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
@@ -111,7 +113,7 @@ meth.region.plot <- function(check.gr,meths, updown = 1000){
    par(mar=c(0,0,0,0))
    ylim <- length(meth.breaks) - 1
    plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
-   axis(1, at=c(0, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
+   axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
    mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
    for(z in seq(ylim)){
      rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
@@ -119,19 +121,38 @@ meth.region.plot <- function(check.gr,meths, updown = 1000){
   par(resetPar())
 }
 
-meth.region.plot.nolegend <- function(check.gr,meths, updown = 1000){
-  meth.breaks <- seq(0, 1, length.out = 10)
+meth.region.plot.contexts <- function(check.gr,meths.cg, meths.chg, meths.chh, updown = 2000){
+  num.rows <- 10
+  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
-  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths$binlen), check.pos[3], meths$binlen))
-  chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
-  rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T))
-  meth.colors <- brewer.pal(nrow(chrom.mat), "Spectral")[nrow(chrom.mat):1]
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.cg$binlen), check.pos[3], meths.cg$binlen))
+  chrom.mat.cg <- sapply(check.region, function(x){ if(length(meths.cg[[meths.cg$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths.cg[[meths.cg$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
+  rownames(chrom.mat.cg) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  chrom.mat.chg <- sapply(check.region, function(x){ if(length(meths.chg[[meths.chg$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths.chg[[meths.chg$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
+  rownames(chrom.mat.chg) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T))
+  chrom.mat.chh <- sapply(check.region, function(x){ if(length(meths.chh[[meths.chh$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths.chh[[meths.chh$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
+  rownames(chrom.mat.chh) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   cex.plot <- 1.5
-  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "))
+  zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
+  layout(zones)
+  par(mar=c(1,4.5,1,2))
+  barplot(chrom.mat.cg, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
+  mtext(text = "CG", side = 1, line = 1)
+  par(mar=c(1,4.5,1,2))
+  barplot(chrom.mat.chg, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
+  mtext(text = "CHG", side = 1, line = 1)
+  par(mar=c(1,4.5,1,2))
+  barplot(chrom.mat.chh, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
+  mtext(text = "CHH", side = 1, line = 1)
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
-  axis(1, at = as.integer(updown/meths$binlen), labels = "start", lwd.ticks = 5, line =0.5)
-  axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
-  axis(1, at = length(colnames(chrom.mat)) - as.integer(updown/meths$binlen), labels = "end", lwd.ticks = 5, line =0.5)
+  axis(1, at = as.integer(updown/meths.cg$binlen), labels = "start", lwd.ticks = 5, line =0.5)
+  axis(1, at = length(colnames(chrom.mat.cg)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = length(colnames(chrom.mat.cg)) - as.integer(updown/meths.cg$binlen), labels = "end", lwd.ticks = 5, line =0.5)
+  plot.new()
+  mtext(text=paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), cex = cex.plot, line = -3)
+  mtext(text=paste("input:", meths.cg$input_bam), cex = 1, line = -5)
+  legend("bottom", c("NA", 0,rep("", (num.rows - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
 
 
@@ -139,9 +160,10 @@ meth.region.plot.nolegend <- function(check.gr,meths, updown = 1000){
 ara.ind <- 161
 ara.ind <- 106
 ara.ind <- 14468
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths, updown = 2000)
+ara.ind <- 17145
+meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cn, updown = 2000)
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.sperm, updown = 2000)
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cg, updown = 2000)
+meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.chg, updown = 2000)
 araport.gff[ara.ind]
 
 start(araport.gff[ara.ind]) - 2000
@@ -154,10 +176,14 @@ ara.ind <- 289
 
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths, updown = 2000)
 
-zones=matrix(c(1,2,3), ncol=1, byrow=T)
-layout(zones)
-meth.region.plot.nolegend(check.gr = araport.gff[ara.ind], meths = meths.cg, updown = 2000)
-meth.region.plot.nolegend(check.gr = araport.gff[ara.ind], meths = meths.chg, updown = 2000)
-meth.region.plot.nolegend(check.gr = araport.gff[ara.ind], meths = meths.chh, updown = 2000)
+
+json.file <- c("/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/methReads", "SRR516176")
+meths.cn <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CN.json", sep = "")))
+meths.cg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CG.json", sep = "")))
+meths.chg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHG.json", sep = "")))
+meths.chh <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHH.json", sep = "")))
+
+meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cn, updown = 2000)
+meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.cg = meths.cg, meths.chg = meths.chg, meths.chh = meths.chh, updown = 2000)
 
 

@@ -2,7 +2,7 @@
 #PBS -S /bin/bash
 #PBS -P cegs
 #PBS -q new_nodes
-#PBS -J 1-8
+#PBS -J 1-18
 #PBS -l select=1:ncpus=4:mem=40gb:local_disk=30G
 #PBS -l walltime=48:00:00
 #PBS -o /home/GMI/rahul.pisupati/logs/logs.bsmeth
@@ -17,8 +17,8 @@ cd $PBS_O_WORKDIR
 
 RefSeq="/home/GMI/rahul.pisupati/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
 
-#inFile=`ls *no_clonal.bam | head -n $PBS_ARRAY_INDEX | tail -n 1`
-inFile=`ls *modified.bam | head -n $PBS_ARRAY_INDEX | tail -n 1`
+inFile=`ls *no_clonal.bam | head -n $PBS_ARRAY_INDEX | tail -n 1`
+#inFile=`ls *modified.bam | head -n $PBS_ARRAY_INDEX | tail -n 1`
 inID=`echo $inFile | cut -f1 -d "_"`
 
 outFol="methReads"
@@ -33,8 +33,8 @@ context=(
   'CHG'
   'CHH'
 )
-
+singleRegion='Chr1,281350,295203'
 for (( i=0; i<4; i=i+1 ));do
-  bshap getmeth -i ${inFile} -r $RefSeq -o $outFol/meths.${inID}.${context[$i]}.json -c ${context[$i]} -v > $outFol/logs/logs.meths.${inID}.${context[$i]} 2>&1 &
+  bshap getmeth -i ${inFile} -r $RefSeq -o $outFol/meths.${inID}.${context[$i]}.json -c ${context[$i]} -v -s ${singleRegion} > $outFol/logs/logs.meths.${inID}.${context[$i]} 2>&1 &
 done
 wait

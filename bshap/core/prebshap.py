@@ -7,6 +7,11 @@ import numpy as np
 import re
 import json
 import string
+from Bio.Alphabet import generic_dna
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from Bio.Align import MultipleSeqAlignment
+from Bio import AlignIO
 
 log = logging.getLogger(__name__)
 
@@ -65,28 +70,38 @@ def getHighlightedSeqs(refseq, rseq, strand):
         re_string = ['C','T','.']
     elif strand == '1':  ## G's should stay
         re_string = ['G', 'A',',']
-    fin_refseq = re.sub('A|T', re_string[2], refseq.upper()).lower()
-    fin_refseq = re.sub(re_string[0].lower(), re_string[0], fin_refseq)
-    fin_rseq = rseq
+    dot_rseq = rseq
     for i,c in enumerate(refseq):
         if c.upper() != re_string[0]:
-            fin_rseq = fin_rseq[:i] + re_string[2] + fin_rseq[i+1:]
-    return fin_refseq, fin_rseq
+            dot_rseq = dot_rseq[:i] + re_string[2] + dot_rseq[i+1:]
+    return dot_rseq
 
-def printInterestingRegion(tair10, binread, rmeth, pointPos=0):
-    ## pointPos = 290598
-    ## map_pos = [cid, ref_pos_start, ref_pos_start_end]
-    map_pos = [binread.reference_name, binread.reference_start, binread.reference_end]
+def getMatchedSeq(binread, tair10, bin_bed):
+    intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
+    bin_positions = np.where(np.in1d(binread.get_reference_positions(), range(intersect_bed[0], intersect_bed[1])))[0]
+    refseq = ''
+    rseq = ''
+    for ind in bin_positions:
+        (i, rind) = binread.get_aligned_pairs()[ind]
+        if i is not None and rind is not None:
+            rseq = rseq + binread.seq[i]
+            refseq = refseq + tair10[bin_bed[0]][rind].seq.encode('ascii')
+        elif i is None and rind is not None:
+            rseq = rseq + '-'
+            refseq = refseq + tair10[bin_bed[0]][rind].seq.encode('ascii')
+        elif rind is None and i is not None:
+            rseq = rseq + binread.seq[i]
+            refseq = refseq + '-'
+    return refseq, rseq
+
+def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
+    ## bin_bed = ['Chr1', start, end, binLen, pointPos]
+    ## intersect_bed = [s, e]
     strand = decodeFlag(binread.flag)[4]
-    refseq = tair10[map_pos[0]][map_pos[1]:map_pos[2]].seq.encode('ascii')
-    rseq = binread.seq
-    dot_refseq, dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
-    print("start:end:meth -- %s: %s - %s : %s" % (map_pos[0], map_pos[1], map_pos[2], rmeth))
-    if pointPos < map_pos[2] and pointPos > map_pos[1]:
-        point_len = pointPos - map_pos[1]
-        print("%s" % '.' * point_len + `pointPos`)
-    print("%s" % dot_refseq)
-    print("%s" % dot_rseq)
+    refseq, rseq = getMatchedSeq(binread, tair10, bin_bed)
+    dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
+    fin_rseq = '_' * (intersect_bed[0] - bin_bed[1]) + dot_rseq + '_' * (bin_bed[2] - intersect_bed[1])
+    return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
 
 def getMethRead(reqcontext, tair10, binread):
     map_pos = [binread.reference_name, binread.reference_start, binread.reference_end]
@@ -118,40 +133,45 @@ def getMethRead(reqcontext, tair10, binread):
     if mt >= 1:
         return mc, mt, float(mc)/mt
     else:
-        return mc, mt, -1   ### We need to differentiate between the reads which are small and has no methylation
+        return mc, mt, -1   # We need to differentiate between the reads which are small and has no methylation
 
-def getMethWind(inBam, tair10, bin_bed, reqcontext = 'CN'):
-    # bin_bed = ['Chr1', start, end, binLen, pointPos]
-    binLen = bin_bed[3]
+def getMethWind(inBam, tair10, required_bed, reqcontext = 'CN'):
+    # required_bed = ['Chr1', start, end, binLen, pointPos]
+    binLen = required_bed[3]
     read_length_thres = binLen/2
-    bin_start = bin_bed[1] - (bin_bed[1] % binLen)
+    bin_start = required_bed[1] - (required_bed[1] % binLen)
     meths = {}
-    estimated_bins = (bin_bed[2] - bin_start) // binLen
+    estimated_bins = (required_bed[2] - bin_start) // binLen
     progress_bins = 0
-    for bins in range(bin_start, bin_bed[2], binLen):        ## sliding windows with binLen
+    window_alignment = []  ## multiple segment alignment
+    for bins in range(bin_start, required_bed[2], binLen):        ## sliding windows with binLen
         binmeth = np.zeros(0)
         binmc = np.zeros(0)
         binmt = np.zeros(0)
         progress_bins += 1
-        for binread in inBam.fetch(bin_bed[0], bins, bins + binLen):
+        dot_refseq = tair10[required_bed[0]][bins:bins + binLen].seq.encode('ascii')
+        dot_refseq = re.sub('A|T', '.', dot_refseq.upper())
+        bins_alignment = [SeqRecord(Seq(dot_refseq, generic_dna), id = required_bed[0] + ':' + str(bins) + '-' + str(bins + binLen))]
+        for binread in inBam.fetch(required_bed[0], bins, bins + binLen):
             rflag = decodeFlag(binread.flag)
-            if len(binread.get_aligned_pairs()) == 0:
+            bin_bed = [required_bed[0], bins, bins + binLen]
+            if len(binread.get_aligned_pairs()) == 0 and rflag[10] != '0' and rflag[8] != '0': ## removing the duplicates
                 continue        ## Skip the read if the alignment is not good ;)
-            intersect_bed = findIntersectbed([bins, bins + binLen], [binread.reference_start, binread.reference_end])
+            intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
             intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
-            if intersect_len > read_length_thres and rflag[10] == '0' and rflag[8] == '0': ## removing the duplicates
-                ## The start of the read is binread.reference_start
+            rseq_record = getSeqRecord(binread, tair10, bin_bed, intersect_bed) ## No need to check for the overlap to print the alignment
+            if intersect_len > read_length_thres:
                 (mc, mt, rmeth) = getMethRead(reqcontext, tair10, binread) ## taking the first and last
                 if rmeth is not None:
                     binmeth = np.append(binmeth, rmeth)
                     binmc = np.append(binmc, mc)
                     binmt = np.append(binmt, mt)
-                    if bin_bed[4] != 0:
-                        printInterestingRegion(tair10, binread, rmeth, bin_bed[4])
+            bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
         meths[bins+1] = binmeth.tolist()
-    return meths
+        window_alignment.append(MultipleSeqAlignment(bins_alignment))
+    return meths, window_alignment
 
 def getMethGenome(bamFile, fastaFile, outFile, reqcontext = "CN", interesting_region='0,0,0'):
     ## input a bam file, bin length
@@ -164,17 +184,18 @@ def getMethGenome(bamFile, fastaFile, outFile, reqcontext = "CN", interesting_re
     meths["chrs"] = chrs
     meths["binlen"] = binLen
     meths["chrslen"] = chrslen
-    if interesting_region == '0,0,0,0':
+    if interesting_region == '0,0,0':
         for cid, clen in zip(chrs, chrslen):     ## chromosome wise
             log.info("analysing chromosome: %s" % cid)
-            bin_bed = [cid, 0, clen, binLen, 0]   ### 0 is to not print reads
-            meths[cid] = getMethWind(inBam, tair10, bin_bed, reqcontext=reqcontext)
+            required_bed = [cid, 0, clen, binLen, 0]   ### 0 is to not print reads
+            meths[cid], = getMethWind(inBam, tair10, required_bed, reqcontext=reqcontext)
     else:
-        bin_bed = interesting_region.split(',')
-        if len(bin_bed) == 3:
-            bin_bed = [bin_bed[0], int(bin_bed[1]), int(bin_bed[2]), binLen, 0]
+        required_bed = interesting_region.split(',')
+        if len(required_bed) == 3:
+            required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, 0]
         else:
-            bin_bed = [bin_bed[0], int(bin_bed[1]), int(bin_bed[2]), binLen, int(bin_bed[3])]
-        meths[bin_bed[0]] = getMethWind(inBam, tair10, bin_bed, reqcontext)
-    with open(outFile, 'wb') as fp:
+            required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, int(required_bed[3])]
+        meths[required_bed[0]], window_alignment = getMethWind(inBam, tair10, required_bed, reqcontext)
+        AlignIO.write(window_alignment, outFile + ".aln", "clustal")
+    with open(outFile + '.json', 'wb') as fp:
         fp.write(json.dumps(meths))
