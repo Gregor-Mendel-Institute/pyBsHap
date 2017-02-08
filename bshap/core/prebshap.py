@@ -104,9 +104,6 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
     return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
 
 def getMethRead(reqcontext, tair10, binread):
-    map_pos = [binread.reference_name, binread.reference_start, binread.reference_end]
-    refseq = tair10[map_pos[0]][map_pos[1]:map_pos[2]].seq.encode('ascii')
-    rseq = binread.seq
     strand = decodeFlag(binread.flag)[4]
     error_rate = 0.01
     if strand == '0': ## Forward read, count the number of C's
@@ -115,19 +112,20 @@ def getMethRead(reqcontext, tair10, binread):
     elif strand == '1': ## reverse
         context = "G"
         #reqstr = "A"   # if this is present the base is non methylated
-    if len(refseq) != len(rseq):
-        return 0, 0, None  ## Skips the reads with short indels
     mc, mt, read_length = 0, 0, 0
-    for i,c in enumerate(refseq):
+    for i,rind in binread.get_aligned_pairs():
         read_length = read_length + 1
+        if i is None or rind is None:  ## Skip the position if there is an indel
+            continue
+        c = tair10[binread.reference_name][rind].seq.encode('ascii')
         if c.upper() == context:
-            (dnastring, methcontext) = parseContext(tair10, map_pos[0], map_pos[1] + i, strand)
+            (dnastring, methcontext) = parseContext(tair10, binread.reference_name, rind, strand)
             checkcontext = reqcontext == methcontext
             if reqcontext == 'CN':
                 checkcontext = True
             if checkcontext:
                 mt += 1
-                if rseq[i].upper() == context:
+                if binread.seq[i].upper() == context:
                     mc += 1
     #log.debug("%s:%s:%s:%s" % (ref_pos,mc, mt, read_length))
     if mt >= 1:
