@@ -33,9 +33,6 @@ meths.cg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CG.
 meths.chg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHG.json", sep = "")))
 meths.chh <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHH.json", sep = "")))
 
-
-
-
 ## Histogram for methylation in reads
 ## 
 meth.calls <- c(as.numeric(as.character(meths$Chr1)), as.numeric(as.character(meths$Chr2)), as.numeric(as.character(meths$Chr3)), as.numeric(as.character(meths$Chr4)), as.numeric(as.character(meths$Chr5)))
@@ -77,30 +74,43 @@ abline(v = 50)
 # }
 
 
-### Checking specific regions
-check.region <- names(meths[[meths$chrs[i]]])[1:100]
-#check.region <- as.character(seq(1, meths$chrslen[i], meths$binlen))
-check.pos <- c(1, 54676, 57576) ## TE1, 1kb up and down
-check.pos <- c(1, 33365,37871) ### Gene AT1G01060
-check.pos <- c(1, 33365,37871) ## ge
-check.pos <- c(1, 513699,515422) ## gene  AT1G02475
-check.pos <- c(1,7064494,7075561) ### TEgene, 1kb up and down
-check.pos <- c(1,3779235,3787293) ## TE gene, 1kb up and down, AT1G11265
-
 #araport.te.gene <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TE_gene.201606.bed", as.is = T)
 #araport.genes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_genes_201606.bed", as.is = T)
 #araport.tes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TEs_201606.bed", as.is = T)
 araport.gff <- import.gff3("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
 
+getMethWinds <- function(check.gr,meths.all, updown){
+  num.rows <- 10
+  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
+  chrom.mat.cn = chrom.mat.cg = chrom.mat.chg = chrom.mat.chh = numeric()
+  for (x in check.region){
+    binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[x]]
+    ## context inds cg = 2, chg = 3, chh = 4
+    if (length(binmeths) > 0){
+      cn.meth = as.numeric(table(cut(binmeths[,1], breaks = meth.breaks, include.lowest = T, right = F)))
+      cg.meth = as.numeric(table(cut(binmeths[,2], breaks = meth.breaks, include.lowest = T, right = F)))
+      chg.meth = as.numeric(table(cut(binmeths[,3], breaks = meth.breaks, include.lowest = T, right = F)))
+      chh.meth = as.numeric(table(cut(binmeths[,4], breaks = meth.breaks, include.lowest = T, right = F)))
+    } else {
+      cn.meth = cg.meth = chg.meth = chh.meth = rep(0,num.rows)
+    }
+    chrom.mat.cn <- cbind(chrom.mat.cn, cn.meth)
+    chrom.mat.cg <- cbind(chrom.mat.cg, cg.meth)
+    chrom.mat.chg <- cbind(chrom.mat.chg, chg.meth)
+    chrom.mat.chh <- cbind(chrom.mat.chh, chh.meth)
+  }
+  meths.names <- levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  rownames(chrom.mat.cn) = rownames(chrom.mat.cg) = rownames(chrom.mat.chg) = rownames(chrom.mat.chh) = meths.names
+  colnames(chrom.mat.cn) = colnames(chrom.mat.cg) = colnames(chrom.mat.chg) = colnames(chrom.mat.chh) = check.region
+  return(list(chrom.mat.cn, chrom.mat.cg, chrom.mat.chg, chrom.mat.chh))
+}
 
 meth.region.plot <- function(check.gr,meths, updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
-  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths$binlen), check.pos[3], meths$binlen))
-  chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
-  #chrom.mat <- chrom.mat[,order(as.numeric(colnames(chrom.mat)))]
-  rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  chrom.mat = getMethWinds(check.gr,meths, updown)[[1]] ### Taking only the totals
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   par(resetPar())
   cex.plot <- 1.5
@@ -124,46 +134,27 @@ meth.region.plot <- function(check.gr,meths, updown = 2000){
 meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
-  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
-  chrom.mat.cg = chrom.mat.chg = chrom.mat.chh = numeric()
-  for (x in check.region){
-    binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[x]]
-    ## context inds cg = 2, chg = 3, chh = 4
-    if (length(binmeths) > 0){
-      cg.meth = as.numeric(table(cut(binmeths[,2], breaks = meth.breaks, include.lowest = T, right = F)))
-      chg.meth = as.numeric(table(cut(binmeths[,3], breaks = meth.breaks, include.lowest = T, right = F)))
-      chh.meth = as.numeric(table(cut(binmeths[,4], breaks = meth.breaks, include.lowest = T, right = F)))
-    } else {
-      cg.meth = chg.meth = chh.meth = rep(0,num.rows)
-    }
-    chrom.mat.cg <- cbind(chrom.mat.cg, cg.meth)
-    chrom.mat.chg <- cbind(chrom.mat.chg, chg.meth)
-    chrom.mat.chh <- cbind(chrom.mat.chh, chh.meth)
-  }
-  meths.names <- levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
-  rownames(chrom.mat.cg) = rownames(chrom.mat.chg) = rownames(chrom.mat.chh) = meths.names
-  colnames(chrom.mat.cg) = colnames(chrom.mat.chg) = colnames(chrom.mat.chh) = check.region
+  chrom.mat = getMethWinds(check.gr,meths.all, updown)
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   cex.plot <- 1.5
   zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
   layout(zones)
   par(mar=c(1,4.5,1,2))
-  barplot(chrom.mat.cg, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
+  barplot(chrom.mat[[2]], space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
   mtext(text = "CG", side = 1, line = 1)
   par(mar=c(1,4.5,1,2))
-  barplot(chrom.mat.chg, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
+  barplot(chrom.mat[[3]], space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
   mtext(text = "CHG", side = 1, line = 1)
   par(mar=c(1,4.5,1,2))
-  barplot(chrom.mat.chh, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
+  barplot(chrom.mat[[4]], space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3)
   mtext(text = "CHH", side = 1, line = 1)
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
-  axis(1, at = as.integer(updown/meths.cg$binlen), labels = "start", lwd.ticks = 5, line =0.5)
-  axis(1, at = length(colnames(chrom.mat.cg)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
-  axis(1, at = length(colnames(chrom.mat.cg)) - as.integer(updown/meths.cg$binlen), labels = "end", lwd.ticks = 5, line =0.5)
+  axis(1, at = as.integer(updown/meths.all$binlen), labels = "start", lwd.ticks = 5, line =0.5)
+  axis(1, at = length(colnames(chrom.mat[[1]])), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = length(colnames(chrom.mat[[1]])) - as.integer(updown/meths.all$binlen), labels = "end", lwd.ticks = 5, line =0.5)
   plot.new()
   mtext(text=paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), cex = cex.plot, line = -3)
-  mtext(text=paste("input:", meths.cg$input_bam), cex = 1, line = -5)
+  mtext(text=paste("input:", meths.all$input_bam), cex = 1, line = -5)
   legend("bottom", c("NA", 0,rep("", (num.rows - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
 
@@ -176,7 +167,7 @@ ara.ind <- 106
 ara.ind <- 14468
 ara.ind <- 17145
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cn, updown = 2000)
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.sperm, updown = 2000)
+meth.region.plot(check.gr = araport.gff[ara.ind], meths = , updown = 2000)
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.chg, updown = 2000)
 araport.gff[ara.ind]
 
@@ -205,5 +196,36 @@ meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.cg = meths.cg, 
 json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/meths.21533.json"
 meths.all <- fromJSON(json.file)
 
-check.gr <- GRanges(seqnames = "Chr1", ranges = IRanges(start = 281342, 295282))
-meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths = meths.all, updown = 2000)
+#check.gr <- GRanges(seqnames = "Chr1", ranges = IRanges(start = 281342, 295282))
+meth.region.plot(check.gr = araport.gff[ara.ind],  meths.all, updown = 2000)
+
+
+meth.region.plot <- function(check.gr,meths, updown = 2000){
+  num.rows <- 10
+  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths$binlen), check.pos[3], meths$binlen))
+  chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
+  #chrom.mat <- chrom.mat[,order(as.numeric(colnames(chrom.mat)))]
+  rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  par(resetPar())
+  cex.plot <- 1.5
+  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", meths$input_bam))
+  axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = as.integer(updown/meths$binlen), labels = "start", lwd.ticks = 5, line =0.5)
+  axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = length(colnames(chrom.mat)) - as.integer(updown/meths$binlen), labels = "end", lwd.ticks = 5, line =0.5)
+  par(fig=c(0.8,0.93,0.8,0.83), new=T)
+  par(mar=c(0,0,0,0))
+  ylim <- length(meth.breaks) - 1
+  plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
+  axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
+  mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
+  for(z in seq(ylim)){
+    rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
+  }
+  par(resetPar())
+}
+
+
