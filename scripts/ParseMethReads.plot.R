@@ -121,17 +121,29 @@ meth.region.plot <- function(check.gr,meths, updown = 2000){
   par(resetPar())
 }
 
-meth.region.plot.contexts <- function(check.gr,meths.cg, meths.chg, meths.chh, updown = 2000){
+meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
-  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.cg$binlen), check.pos[3], meths.cg$binlen))
-  chrom.mat.cg <- sapply(check.region, function(x){ if(length(meths.cg[[meths.cg$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths.cg[[meths.cg$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
-  rownames(chrom.mat.cg) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
-  chrom.mat.chg <- sapply(check.region, function(x){ if(length(meths.chg[[meths.chg$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths.chg[[meths.chg$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
-  rownames(chrom.mat.chg) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T))
-  chrom.mat.chh <- sapply(check.region, function(x){ if(length(meths.chh[[meths.chh$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths.chh[[meths.chh$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
-  rownames(chrom.mat.chh) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
+  chrom.mat.cg = chrom.mat.chg = chrom.mat.chh = numeric()
+  for (x in check.region){
+    binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[x]]
+    ## context inds cg = 2, chg = 3, chh = 4
+    if (length(binmeths) > 0){
+      cg.meth = as.numeric(table(cut(binmeths[,2], breaks = meth.breaks, include.lowest = T, right = F)))
+      chg.meth = as.numeric(table(cut(binmeths[,3], breaks = meth.breaks, include.lowest = T, right = F)))
+      chh.meth = as.numeric(table(cut(binmeths[,4], breaks = meth.breaks, include.lowest = T, right = F)))
+    } else {
+      cg.meth = chg.meth = chh.meth = rep(0,num.rows)
+    }
+    chrom.mat.cg <- cbind(chrom.mat.cg, cg.meth)
+    chrom.mat.chg <- cbind(chrom.mat.chg, chg.meth)
+    chrom.mat.chh <- cbind(chrom.mat.chh, chh.meth)
+  }
+  meths.names <- levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
+  rownames(chrom.mat.cg) = rownames(chrom.mat.chg) = rownames(chrom.mat.chh) = meths.names
+  colnames(chrom.mat.cg) = colnames(chrom.mat.chg) = colnames(chrom.mat.chh) = check.region
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   cex.plot <- 1.5
   zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
@@ -156,6 +168,8 @@ meth.region.plot.contexts <- function(check.gr,meths.cg, meths.chg, meths.chh, u
 }
 
 
+
+
 #check.pos <- as.numeric(getupdown.araport(ara.ind, aradf = araport.tes))
 ara.ind <- 161
 ara.ind <- 106
@@ -177,7 +191,7 @@ ara.ind <- 289
 meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths, updown = 2000)
 
 
-json.file <- c("/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/methReads", "SRR516176")
+json.file <- c("/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/", "21533")
 meths.cn <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CN.json", sep = "")))
 meths.cg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CG.json", sep = "")))
 meths.chg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHG.json", sep = "")))
@@ -187,3 +201,9 @@ meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cn, updown = 200
 meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.cg = meths.cg, meths.chg = meths.chg, meths.chh = meths.chh, updown = 2000)
 
 
+
+json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/meths.21533.json"
+meths.all <- fromJSON(json.file)
+
+check.gr <- GRanges(seqnames = "Chr1", ranges = IRanges(start = 281342, 295282))
+meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths = meths.all, updown = 2000)

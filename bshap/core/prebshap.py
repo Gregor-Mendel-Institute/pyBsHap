@@ -53,11 +53,11 @@ def parseContext(tair10, cid, pos, strand):
     except:
         return ("CNN", "CN")
     if dnastring[1].upper() == 'G':
-        dna_context = "CG"
+        dna_context = ["CG",0]
     elif dnastring[2].upper() == 'G':
-        dna_context = "CHG"
+        dna_context = ["CHG",1]
     elif dnastring:
-        dna_context = "CHH"
+        dna_context = ["CHH",2]
     return (dnastring, dna_context)
 
 def decodeFlag(flag):
@@ -97,13 +97,14 @@ def getMatchedSeq(binread, tair10, bin_bed):
 def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
     ## bin_bed = ['Chr1', start, end, binLen, pointPos]
     ## intersect_bed = [s, e]
+    char_add = 'N'
     strand = decodeFlag(binread.flag)[4]
     refseq, rseq = getMatchedSeq(binread, tair10, bin_bed)
     dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
-    fin_rseq = '_' * (intersect_bed[0] - bin_bed[1]) + dot_rseq + '_' * (bin_bed[2] - intersect_bed[1])
+    fin_rseq = char_add * (intersect_bed[0] - bin_bed[1]) + dot_rseq + char_add * (bin_bed[2] - intersect_bed[1])
     return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
 
-def getMethRead(reqcontext, tair10, binread):
+def getMethRead(tair10, binread):
     strand = decodeFlag(binread.flag)[4]
     error_rate = 0.01
     if strand == '0': ## Forward read, count the number of C's
@@ -112,7 +113,7 @@ def getMethRead(reqcontext, tair10, binread):
     elif strand == '1': ## reverse
         context = "G"
         #reqstr = "A"   # if this is present the base is non methylated
-    mc, mt, read_length = 0, 0, 0
+    mCs, tCs, read_length = [0,0,0], [0,0,0], 0
     for i,rind in binread.get_aligned_pairs():
         read_length = read_length + 1
         if i is None or rind is None:  ## Skip the position if there is an indel
@@ -120,20 +121,19 @@ def getMethRead(reqcontext, tair10, binread):
         c = tair10[binread.reference_name][rind].seq.encode('ascii')
         if c.upper() == context:
             (dnastring, methcontext) = parseContext(tair10, binread.reference_name, rind, strand)
-            checkcontext = reqcontext == methcontext
-            if reqcontext == 'CN':
-                checkcontext = True
-            if checkcontext:
-                mt += 1
-                if binread.seq[i].upper() == context:
-                    mc += 1
+            tCs[methcontext[1]] += 1
+            if binread.seq[i].upper() == context:
+                mCs[methcontext[1]] += 1
     #log.debug("%s:%s:%s:%s" % (ref_pos,mc, mt, read_length))
-    if mt >= 1:
-        return mc, mt, float(mc)/mt
-    else:
-        return mc, mt, -1   # We need to differentiate between the reads which are small and has no methylation
+    nc_thres = 0
+    rmeth = [float(mCs[i])/tCs[i] if tCs[i] > nc_thres else -1 for i in range(3)]
+    tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) > nc_thres else -1
+    #permeths = {'CN': tmeth, 'CG': rmeth[0], 'CHG': rmeth[1], 'CHH': rmeth[2]}
+    permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
+    return permeths
+    # We need to differentiate between the reads which are small and has no methylation
 
-def getMethWind(inBam, tair10, required_bed, reqcontext = 'CN'):
+def getMethWind(inBam, tair10, required_bed):
     # required_bed = ['Chr1', start, end, binLen, pointPos]
     binLen = required_bed[3]
     read_length_thres = binLen/2
@@ -143,9 +143,7 @@ def getMethWind(inBam, tair10, required_bed, reqcontext = 'CN'):
     progress_bins = 0
     window_alignment = []  ## multiple segment alignment
     for bins in range(bin_start, required_bed[2], binLen):        ## sliding windows with binLen
-        binmeth = np.zeros(0)
-        binmc = np.zeros(0)
-        binmt = np.zeros(0)
+        binmeth = []
         progress_bins += 1
         dot_refseq = tair10[required_bed[0]][bins:bins + binLen].seq.encode('ascii')
         dot_refseq = re.sub('A|T', '.', dot_refseq.upper())
@@ -159,19 +157,16 @@ def getMethWind(inBam, tair10, required_bed, reqcontext = 'CN'):
             intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
             rseq_record = getSeqRecord(binread, tair10, bin_bed, intersect_bed) ## No need to check for the overlap to print the alignment
             if intersect_len > read_length_thres:
-                (mc, mt, rmeth) = getMethRead(reqcontext, tair10, binread) ## taking the first and last
-                if rmeth is not None:
-                    binmeth = np.append(binmeth, rmeth)
-                    binmc = np.append(binmc, mc)
-                    binmt = np.append(binmt, mt)
+                permeths = getMethRead(tair10, binread) ## taking the first and last
+                binmeth.append(permeths)
             bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
-        meths[bins+1] = binmeth.tolist()
+        meths[bins+1] = binmeth
         window_alignment.append(MultipleSeqAlignment(bins_alignment))
     return meths, window_alignment
 
-def getMethGenome(bamFile, fastaFile, outFile, reqcontext = "CN", interesting_region='0,0,0'):
+def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     ## input a bam file, bin length
     ## make sure the binLen is less than the read length
     inBam = pysam.AlignmentFile(bamFile, "rb")
@@ -186,14 +181,14 @@ def getMethGenome(bamFile, fastaFile, outFile, reqcontext = "CN", interesting_re
         for cid, clen in zip(chrs, chrslen):     ## chromosome wise
             log.info("analysing chromosome: %s" % cid)
             required_bed = [cid, 0, clen, binLen, 0]   ### 0 is to not print reads
-            meths[cid], = getMethWind(inBam, tair10, required_bed, reqcontext=reqcontext)
+            meths[cid], = getMethWind(inBam, tair10, required_bed)
     else:
         required_bed = interesting_region.split(',')
         if len(required_bed) == 3:
             required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, 0]
         else:
             required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, int(required_bed[3])]
-        meths[required_bed[0]], window_alignment = getMethWind(inBam, tair10, required_bed, reqcontext)
-        AlignIO.write(window_alignment, outFile + ".aln", "clustal")
-    with open(outFile + '.json', 'wb') as fp:
+        meths[required_bed[0]], window_alignment = getMethWind(inBam, tair10, required_bed)
+        AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
+    with open('meths.' + outFile + '.json', 'wb') as fp:
         fp.write(json.dumps(meths))
