@@ -46,7 +46,6 @@ meth.density <- density(meth.calls, from = 0, to = 1)
 cex.plot <- 1.2
 
 #pdf("Meth.reads.pdf")
-
 zones=matrix(c(1,1,2,3), ncol=2, byrow=T)
 layout(zones, heights=c(1/5,4/5))
 par(mar=c(6,5,0,1))
@@ -55,24 +54,11 @@ title(main = "Methylation on BS-seq reads for Col_0", line = -6, cex.main = cex.
 title(main = "SRR771698", line = -8, cex.main = cex.plot)
 plot(meth.density$x * 100, (meth.density$y/max(meth.density$y))*max(hist.meth$density), type = "l", col = colors.plot[2], lwd = 4, ylim = c(0, 0.27), ylab = "Density", xlab = "% methylation", cex.axis = cex.plot, cex.lab = cex.plot, main = "")
 hist(meth.calls * 100, breaks = 80, xlab = "% methylation", cex.axis = cex.plot, cex.lab = cex.plot, ylim = c(0, 20000), col = colors.plot[1], main = "")
-
 abline(v = 50)
-
 #dev.off()
 
 ##################
 ## Plotting a manhattan plot
-
-
-# cex.plot = 1.2
-# plot(0,0, xlim = c(0, sum(meths$chrslen)), ylim = c(0,100), xaxt = "n", ylab = "% methylation", xlab = "Chromosomes", type = "n", cex.lab = cex.plot, xaxs="i")
-# chr.index = 1
-# for (i in 1:length(meths$chrslen)){
-#   axis(1, at = (chr.index + (meths$chrslen[i]/2)), labels = meths$chrs[i], cex.axis = cex.plot, tick = F)
-#   chr.index = chr.index + meths$chrslen[i]
-#   abline(v = chr.index, col = "grey")
-# }
-
 
 #araport.te.gene <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TE_gene.201606.bed", as.is = T)
 #araport.genes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_genes_201606.bed", as.is = T)
@@ -88,7 +74,7 @@ getMethWinds <- function(check.gr,meths.all, updown){
   for (x in check.region){
     binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[x]]
     ## context inds cg = 2, chg = 3, chh = 4
-    if (length(binmeths) > 0){
+    if (nrow(binmeths) > 0){
       cn.meth = as.numeric(table(cut(binmeths[,1], breaks = meth.breaks, include.lowest = T, right = F)))
       cg.meth = as.numeric(table(cut(binmeths[,2], breaks = meth.breaks, include.lowest = T, right = F)))
       chg.meth = as.numeric(table(cut(binmeths[,3], breaks = meth.breaks, include.lowest = T, right = F)))
@@ -114,7 +100,7 @@ meth.region.plot <- function(check.gr,meths, updown = 2000){
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   par(resetPar())
   cex.plot <- 1.5
-  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", meths$input_bam))
+  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", meths.all$input_bam))
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = as.integer(updown/meths$binlen), labels = "start", lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
@@ -158,74 +144,108 @@ meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
   legend("bottom", c("NA", 0,rep("", (num.rows - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
 
+## Try checking this plots for different regions
 
+json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/meths.SRR3311819.json"
+meths.all <- fromJSON(json.file)
 
+meth.region.plot(check.gr = GRanges("Chr1", IRanges(11705950,11724300)), meths = meths, updown = 2000)
 
-#check.pos <- as.numeric(getupdown.araport(ara.ind, aradf = araport.tes))
 ara.ind <- 161
 ara.ind <- 106
 ara.ind <- 14468
 ara.ind <- 17145
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cn, updown = 2000)
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = , updown = 2000)
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.chg, updown = 2000)
-araport.gff[ara.ind]
 
-start(araport.gff[ara.ind]) - 2000
+meth.region.plot(check.gr = araport.gff[ara.ind],  meths.all, updown = 2000)
+meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.all = meths.all, updown = 2000)
 
 
+##### ============================================
+##
+##  Now trying to do the correlations in each window between the contexts
+##
+##
+##### ============================================
+
+pval_thres = 0.05
+getEstimateCorTest <- function(conx_cony_corr){
+  t.out = NA
+  if (!is.na(conx_cony_corr$p.value)){
+    if(conx_cony_corr$p.value < pval_thres){
+      t.out = conx_cony_corr$estimate
+    }
+  } 
+  return(t.out)
+}
+
+getMethCorrWind <- function(check.gr, meths.all, updown = 2000){
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
+  chrom.corr.cg.chg = chrom.corr.cg.chh = chrom.corr.chg.chh =  numeric()
+  for (x in check.region){
+    binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[x]]
+    binmeths[binmeths == -1] <- NA
+    ## context inds cg = 2, chg = 3, chh = 4
+    t.cg.chg <- try(cor.test(binmeths[,2], binmeths[,3]), silent = T)
+    t.cg.chh <- try(cor.test(binmeths[,2], binmeths[,4]), silent = T)
+    t.chg.chh <- try(cor.test(binmeths[,3], binmeths[,4]), silent = T)
+    t.e.cg.chg = t.e.cg.chh = t.e.chg.chh = NA
+    if(!inherits(t.cg.chg, 'try-error')) {t.e.cg.chg = getEstimateCorTest(t.cg.chg)}
+    if(!inherits(t.cg.chh, 'try-error')) {t.e.cg.chh = getEstimateCorTest(t.cg.chh)}
+    if(!inherits(t.chg.chh, 'try-error')) {t.e.chg.chh = getEstimateCorTest(t.chg.chh)}
+    chrom.corr.cg.chg <- c(chrom.corr.cg.chg, as.numeric(t.e.cg.chg))
+    chrom.corr.cg.chh <- c(chrom.corr.cg.chh, as.numeric(t.e.cg.chh))
+    chrom.corr.chg.chh <- c(chrom.corr.chg.chh, as.numeric(t.e.chg.chh))
+  }
+  meth.colors <- brewer.pal(4, "Dark2")
+  #par(resetPar())
+  cex.plot <- 1.5
+  plot(seq(length(check.region)), chrom.corr.cg.chg, col = meth.colors[1], pch = 19, cex = cex.plot, ylim = c(-1, 1), ylab = "Correlation with different contexts", xaxt = "n", cex.lab = cex.plot, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", meths.all$input_bam))
+  points(seq(length(check.region)), chrom.corr.cg.chh, col = meth.colors[2], pch = 19, cex = cex.plot)
+  points(seq(length(check.region)), chrom.corr.chg.chh, col = meth.colors[3], pch = 19, cex = cex.plot)
+  legend("topright", fill = meth.colors, c("CG-CHG", "CG-CHH", "CHG-CHH"))
+  axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = as.integer(updown/meths.all$binlen), labels = "start", lwd.ticks = 5, line =0.5)
+  axis(1, at = length(check.region), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = length(check.region) - as.integer(updown/meths.all$binlen), labels = "end", lwd.ticks = 5, line =0.5)
+}
+
+
+
+json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/meths.SRR3311819.json"
+meths.all <- fromJSON(json.file)
 
 meth.region.plot(check.gr = GRanges("Chr1", IRanges(11705950,11724300)), meths = meths, updown = 2000)
 
-ara.ind <- 289
+ara.ind <- 161
+ara.ind <- 106
+ara.ind <- 14468  ### ROS1 gene
+ara.ind <- 17145
+check.gr <- araport.gff[ara.ind]
 
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths, updown = 2000)
+output_fol <- "~/Templates/"
+ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
+input_folder <- "/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem"
+input_file <- "SRR3311820_processed_reads_no_clonal.bam"
+output_id <- strsplit(input_file, "_")[[1]][1]
+updown <- 5000
+check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
+
+##bshap getmeth -i SRR3311819_processed_reads_no_clonal.bam -r  -v -s Chr1,281350,295203  -o SRR3311819
+pybshap.command <- paste("bshap getmeth -i", file.path(input_folder, input_file), "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
+setwd(output_fol)
+system(pybshap.command)
+meths.all <- fromJSON(paste("meths.", output_id,  ".json", sep = ""))
+
+meth.region.plot(check.gr = check.gr,  meths.all, updown = 5000)
+meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.all = meths.all, updown = 5000)
+
+par(resetPar())
+getMethCorrWind(check.gr, meths.all)
 
 
-json.file <- c("/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/", "21533")
-meths.cn <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CN.json", sep = "")))
-meths.cg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CG.json", sep = "")))
-meths.chg <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHG.json", sep = "")))
-meths.chh <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CHH.json", sep = "")))
+check.region <- as.character(seq(start(check.gr) + 1 - (start(check.gr) %% meths.all$binlen), end(check.gr), meths.all$binlen))
+meths.all[[as.character(seqnames(check.gr))]][[check.region[6]]]
 
-meth.region.plot(check.gr = araport.gff[ara.ind], meths = meths.cn, updown = 2000)
-meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.cg = meths.cg, meths.chg = meths.chg, meths.chh = meths.chh, updown = 2000)
-
-
-
-json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/003.zilberman/meths.21533.json"
-meths.all <- fromJSON(json.file)
-
-#check.gr <- GRanges(seqnames = "Chr1", ranges = IRanges(start = 281342, 295282))
-meth.region.plot(check.gr = araport.gff[ara.ind],  meths.all, updown = 2000)
-
-
-meth.region.plot <- function(check.gr,meths, updown = 2000){
-  num.rows <- 10
-  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
-  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths$binlen), check.pos[3], meths$binlen))
-  chrom.mat <- sapply(check.region, function(x){ if(length(meths[[meths$chrs[check.pos[1]]]][[x]]) > 0) {y = cut(meths[[meths$chrs[check.pos[1]]]][[x]], breaks = meth.breaks, include.lowest = T, right = F); as.numeric(table(y))}else {rep(0,length(meth.breaks)-1)}})
-  #chrom.mat <- chrom.mat[,order(as.numeric(colnames(chrom.mat)))]
-  rownames(chrom.mat) = levels(cut(c(0,0), breaks=round(meth.breaks, 2), include.lowest = T, right = F))
-  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
-  par(resetPar())
-  cex.plot <- 1.5
-  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", meths$input_bam))
-  axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
-  axis(1, at = as.integer(updown/meths$binlen), labels = "start", lwd.ticks = 5, line =0.5)
-  axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
-  axis(1, at = length(colnames(chrom.mat)) - as.integer(updown/meths$binlen), labels = "end", lwd.ticks = 5, line =0.5)
-  par(fig=c(0.8,0.93,0.8,0.83), new=T)
-  par(mar=c(0,0,0,0))
-  ylim <- length(meth.breaks) - 1
-  plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
-  axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
-  mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
-  for(z in seq(ylim)){
-    rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
-  }
-  par(resetPar())
-}
 
 

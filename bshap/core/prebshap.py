@@ -7,6 +7,7 @@ import numpy as np
 import re
 import json
 import string
+import os.path
 from Bio.Alphabet import generic_dna
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -173,7 +174,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
     meths = {}
-    meths["input_bam"] = bamFile
+    meths["input_bam"] = os.path.basename(bamFile)
     meths["chrs"] = chrs
     meths["binlen"] = binLen
     meths["chrslen"] = chrslen
