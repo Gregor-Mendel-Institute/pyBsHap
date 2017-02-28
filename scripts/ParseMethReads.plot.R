@@ -293,4 +293,15 @@ check.region <- as.character(seq(start(check.gr) + 1 - (start(check.gr) %% meths
 meths.all[[as.character(seqnames(check.gr))]][[check.region[6]]]
 
 
+#### h5py FILES
+library(rhdf5)
+input_file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/meths.SRR771698.hdf5"
+
+h5ls(input_file)
+attr(h5read(input_file, '/Chr1', read.attributes = T), "positions")
+
+meths <- h5read(input_file, '/Chr1')
+meths[1]
+
+
 
