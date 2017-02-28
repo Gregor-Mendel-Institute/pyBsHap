@@ -5,9 +5,9 @@ from pyfaidx import Fasta
 import logging
 import numpy as np
 import re
-import json
+import h5py
 import string
-import os.path
+import os.path, sys
 from Bio.Alphabet import generic_dna
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -15,6 +15,10 @@ from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
 
 log = logging.getLogger(__name__)
+
+def die(msg):
+  sys.stderr.write('Error: ' + msg + '\n')
+  sys.exit(1)
 
 def getChrs(inBam):
     chrs = np.array([x['SN'] for x in inBam.header['SQ']])
@@ -125,25 +129,25 @@ def getMethRead(tair10, binread):
             tCs[methcontext[1]] += 1
             if binread.seq[i].upper() == context:
                 mCs[methcontext[1]] += 1
-    #log.debug("%s:%s:%s:%s" % (ref_pos,mc, mt, read_length))
     nc_thres = 0
     rmeth = [float(mCs[i])/tCs[i] if tCs[i] > nc_thres else -1 for i in range(3)]
     tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) > nc_thres else -1
-    #permeths = {'CN': tmeth, 'CG': rmeth[0], 'CHG': rmeth[1], 'CHH': rmeth[2]}
     permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
     return permeths
     # We need to differentiate between the reads which are small and has no methylation
 
-def getMethWind(inBam, tair10, required_bed):
-    # required_bed = ['Chr1', start, end, binLen, pointPos]
+def getMethWind(inBam, tair10, required_bed, meths):
+    # required_bed = ['Chr1', start, end, binLen]
     binLen = required_bed[3]
     read_length_thres = binLen/2
     bin_start = required_bed[1] - (required_bed[1] % binLen)
-    meths = {}
-    estimated_bins = (required_bed[2] - bin_start) // binLen
+    estimated_bins = range(bin_start, required_bed[2], binLen)
+    dt = h5py.special_dtype(vlen=np.dtype('float16'))
+    reqmeths = meths.create_dataset(required_bed[0],compression="gzip", shape = (len(estimated_bins),4,), dtype=dt)
+    meths[required_bed[0]].attrs['positions'] = estimated_bins
     progress_bins = 0
     window_alignment = []  ## multiple segment alignment
-    for bins in range(bin_start, required_bed[2], binLen):        ## sliding windows with binLen
+    for bins in estimated_bins:        ## sliding windows with binLen
         binmeth = []
         progress_bins += 1
         dot_refseq = tair10[required_bed[0]][bins:bins + binLen].seq.encode('ascii')
@@ -163,33 +167,36 @@ def getMethWind(inBam, tair10, required_bed):
             bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
-        meths[bins+1] = binmeth
+        reqmeths[progress_bins-1] = np.array(binmeth).T
         window_alignment.append(MultipleSeqAlignment(bins_alignment))
-    return meths, window_alignment
+    return window_alignment
 
 def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     ## input a bam file, bin length
     ## make sure the binLen is less than the read length
+    log.info("loading the input files!")
     inBam = pysam.AlignmentFile(bamFile, "rb")
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
-    meths = {}
-    meths["input_bam"] = os.path.basename(bamFile)
-    meths["chrs"] = chrs
-    meths["binlen"] = binLen
-    meths["chrslen"] = chrslen
+    log.info("finished!")
+    meths = h5py.File('meths.' + outFile + '.hdf5', 'w')
+    meths.create_dataset('input_bam', data = os.path.basename(bamFile))
+    meths.create_dataset('chrs', data = chrs)
+    meths.create_dataset('binlen', data = binLen)
+    meths.create_dataset('chrslen', data = chrslen)
     if interesting_region == '0,0,0':
         for cid, clen in zip(chrs, chrslen):     ## chromosome wise
             log.info("analysing chromosome: %s" % cid)
-            required_bed = [cid, 0, clen, binLen, 0]   ### 0 is to not print reads
-            meths[cid], = getMethWind(inBam, tair10, required_bed)
+            required_bed = [cid, 0, clen, binLen]   ### 0 is to not print reads
+            window_alignment = getMethWind(inBam, tair10, required_bed, meths)
     else:
         required_bed = interesting_region.split(',')
         if len(required_bed) == 3:
             required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, 0]
         else:
-            required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, int(required_bed[3])]
-        meths[required_bed[0]], window_alignment = getMethWind(inBam, tair10, required_bed)
+            die("error in the input bed position: chromosome,start,end")
+        log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
+        window_alignment = getMethWind(inBam, tair10, required_bed, meths)
         AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
-    with open('meths.' + outFile + '.json', 'wb') as fp:
-        fp.write(json.dumps(meths))
+    meths.close()
+    log.info("finished!")

@@ -117,6 +117,7 @@ meth.region.plot <- function(check.gr,meths, updown = 2000){
   par(resetPar())
 }
 
+
 meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
@@ -143,6 +144,51 @@ meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
   mtext(text=paste("input:", meths.all$input_bam), cex = 1, line = -5)
   legend("bottom", c("NA", 0,rep("", (num.rows - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
+
+drawMethPlot <- function(check.gr, meths.all, context, max_reads, updown, cex.plot = 1.5){
+  num.rows <- 10
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
+  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  plot(-10, -10, xlim = c(0, length(check.region)), ylim = c(0, max_reads + 30), ylab = "Number of reads", xaxt = "n", xlab = "", cex.lab = cex.plot, frame.plot=FALSE)
+  for (xind in seq(length(check.region))){
+    binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[check.region[xind]]]
+    abline(v = xind, col = "gray60", lty = 2)
+    for (j in seq(nrow(binmeths))){
+      methcol = meth.colors[as.numeric(cut(binmeths[j-1,context], breaks = meth.breaks, include.lowest = T, right = F))]
+      rect(xleft = xind, xright = xind + 1, ybottom = j, ytop = j + 1, col = methcol, border = F)
+    }
+  }
+}
+
+meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
+  max_reads = 40
+  num.rows = 10
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
+  layout(zones)
+  par(mar=c(1,4.5,1,2))
+  drawMethPlot(check.gr = check.gr, meths.all, context = 2, max_reads = max_reads, updown = updown)
+  mtext(text = "CG", side = 1, line = 1)
+  par(mar=c(1,4.5,1,2))
+  drawMethPlot(check.gr = check.gr, meths.all, context = 3, max_reads = max_reads, updown = updown)
+  mtext(text = "CHG", side = 1, line = 1)
+  par(mar=c(1,4.5,1,2))
+  drawMethPlot(check.gr = check.gr, meths.all, context = 4, max_reads = max_reads, updown = updown)
+  mtext(text = "CHH", side = 1, line = 1)
+  axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = as.integer(updown/meths.all$binlen), labels = "start", lwd.ticks = 5, line =0.5)
+  axis(1, at = length(check.region), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = length(check.region) - as.integer(updown/meths.all$binlen), labels = "end", lwd.ticks = 5, line =0.5)
+  plot.new()
+  mtext(text=paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), cex = cex.plot, line = -3)
+  mtext(text=paste("input:", meths.all$input_bam), cex = 1, line = -5)
+  legend("bottom", c("NA", 0,rep("", (10 - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
+}
+
 
 ## Try checking this plots for different regions
 
@@ -225,20 +271,19 @@ check.gr <- araport.gff[ara.ind]
 
 output_fol <- "~/Templates/"
 ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
-input_folder <- "/lustre/scratch/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem"
-input_file <- "SRR3311820_processed_reads_no_clonal.bam"
-output_id <- strsplit(input_file, "_")[[1]][1]
+input_file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/SRR771698_processed_reads_no_clonal.bam"
+output_id <- strsplit(basename(input_folder), "_")[[1]][1]
 updown <- 5000
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
 
 ##bshap getmeth -i SRR3311819_processed_reads_no_clonal.bam -r  -v -s Chr1,281350,295203  -o SRR3311819
-pybshap.command <- paste("bshap getmeth -i", file.path(input_folder, input_file), "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
+pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
 setwd(output_fol)
 system(pybshap.command)
 meths.all <- fromJSON(paste("meths.", output_id,  ".json", sep = ""))
 
 meth.region.plot(check.gr = check.gr,  meths.all, updown = 5000)
-meth.region.plot.contexts(check.gr = araport.gff[ara.ind], meths.all = meths.all, updown = 5000)
+meth.region.plot.contexts(check.gr = check.gr, meths.all = meths.all, updown = 3000)
 
 par(resetPar())
 getMethCorrWind(check.gr, meths.all)
