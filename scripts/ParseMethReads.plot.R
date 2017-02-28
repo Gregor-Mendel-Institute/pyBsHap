@@ -9,9 +9,6 @@ resetPar <- function() {
   op
 }
 
-
-colors.plot <- brewer.pal(5, "Paired")[c(1,2,1,2,1)]
-
 json.file <- "/lustre/scratch/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516164/meths.SRR516164.bins.json"
 json.file <- "/lustre/scratch/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516175/meths.SRR516175.json"
 json.file <- "/lustre/scratch/projects/cegs/rahul/008.Col-0.Bis/02.methylpy/meths.SRR771698.json"
@@ -19,7 +16,7 @@ json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/
 json.file <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CN.json"
 json.file.cg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CG.json"
 json.file.chg <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CHG.json"
-json.file.chh <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/temp.meths.CHH.json"
+json.file.chh <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0.SRR771698/meths.SRR771698.CN.json"
 
 meths <- fromJSON(json.file)
 meths.sperm <- fromJSON(json.file)
@@ -35,26 +32,30 @@ meths.chh <- fromJSON(file.path(json.file[1], paste("meths.", json.file[2], ".CH
 
 ## Histogram for methylation in reads
 ## 
-meth.calls <- c(as.numeric(as.character(meths$Chr1)), as.numeric(as.character(meths$Chr2)), as.numeric(as.character(meths$Chr3)), as.numeric(as.character(meths$Chr4)), as.numeric(as.character(meths$Chr5)))
-meth.calls <- meth.calls[!is.na(meth.calls)]
-meth.calls <- meth.calls[which(meth.calls != -1)]
-hist.meth <- hist(meth.calls, plot = F, breaks = 50)
-hist.meth$density <- hist.meth$counts/sum(hist.meth$counts)
-meth.density <- density(meth.calls, from = 0, to = 1)
+getMethDensityPlot <- function(meths){
+  meth.calls <- c(as.numeric(as.character(unlist(meths[['Chr1']]))), as.numeric(as.character(unlist(meths[['Chr2']]))), as.numeric(as.character(unlist(meths[['Chr3']]))), as.numeric(as.character(unlist(meths[['Chr4']]))), as.numeric(as.character(unlist(meths[['Chr5']]))))
+  meth.calls <- meth.calls[!is.na(meth.calls)]
+  meth.calls <- meth.calls[which(meth.calls != -1)]
+  hist.meth <- hist(meth.calls, plot = F, breaks = 50)
+  hist.meth$density <- hist.meth$counts/sum(hist.meth$counts)
+  meth.density <- density(meth.calls, from = 0, to = 1)
+  zones=matrix(c(1,1,2,3), ncol=2, byrow=T)
+  colors.plot <- brewer.pal(5, "Paired")[c(1,2,1,2,1)]
+  layout(zones, heights=c(1/5,4/5))
+  par(mar=c(6,5,0,1))
+  plot.new()
+  title(main = "Methylation on BS-seq reads for Col_0", line = -6, cex.main = cex.plot * 1.4)
+  title(main = "SRR771698", line = -8, cex.main = cex.plot)
+  plot(meth.density$x * 100, (meth.density$y/max(meth.density$y))*max(hist.meth$density), type = "l", col = colors.plot[2], lwd = 4, ylim = c(0, 0.27), ylab = "Density", xlab = "% methylation", cex.axis = cex.plot, cex.lab = cex.plot, main = "")
+  hist(meth.calls[which(meth.calls != 0)] * 100, breaks = 80, xlab = "% methylation", cex.axis = cex.plot, cex.lab = cex.plot, xlim = c(0, 100), col = colors.plot[1], main = "")
+  abline(v = 50)
+}
+
 
 
 cex.plot <- 1.2
-
+getMethDensityPlot(meths)
 #pdf("Meth.reads.pdf")
-zones=matrix(c(1,1,2,3), ncol=2, byrow=T)
-layout(zones, heights=c(1/5,4/5))
-par(mar=c(6,5,0,1))
-plot.new()
-title(main = "Methylation on BS-seq reads for Col_0", line = -6, cex.main = cex.plot * 1.4)
-title(main = "SRR771698", line = -8, cex.main = cex.plot)
-plot(meth.density$x * 100, (meth.density$y/max(meth.density$y))*max(hist.meth$density), type = "l", col = colors.plot[2], lwd = 4, ylim = c(0, 0.27), ylab = "Density", xlab = "% methylation", cex.axis = cex.plot, cex.lab = cex.plot, main = "")
-hist(meth.calls * 100, breaks = 80, xlab = "% methylation", cex.axis = cex.plot, cex.lab = cex.plot, ylim = c(0, 20000), col = colors.plot[1], main = "")
-abline(v = 50)
 #dev.off()
 
 ##################
@@ -154,7 +155,9 @@ drawMethPlot <- function(check.gr, meths.all, context, max_reads, updown, cex.pl
   plot(-10, -10, xlim = c(0, length(check.region)), ylim = c(0, max_reads + 30), ylab = "Number of reads", xaxt = "n", xlab = "", cex.lab = cex.plot, frame.plot=FALSE)
   for (xind in seq(length(check.region))){
     binmeths = meths.all[[meths.all$chrs[check.pos[1]]]][[check.region[xind]]]
-    abline(v = xind, col = "gray60", lty = 2)
+    if (xind %% 10 == 0){
+      abline(v = xind, col = "gray60", lty = 2)
+    }
     for (j in seq(nrow(binmeths))){
       methcol = meth.colors[as.numeric(cut(binmeths[j-1,context], breaks = meth.breaks, include.lowest = T, right = F))]
       rect(xleft = xind, xright = xind + 1, ybottom = j, ytop = j + 1, col = methcol, border = F)
@@ -167,6 +170,7 @@ meth.region.plot.contexts <- function(check.gr,meths.all, updown = 2000){
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% meths.all$binlen), check.pos[3], meths.all$binlen))
   max_reads = 40
   num.rows = 10
+  cex.plot = 1.5
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
   layout(zones)
@@ -281,6 +285,7 @@ pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o",
 setwd(output_fol)
 system(pybshap.command)
 meths.all <- fromJSON(paste("meths.", output_id,  ".json", sep = ""))
+
 
 meth.region.plot(check.gr = check.gr,  meths.all, updown = 5000)
 meth.region.plot.contexts(check.gr = check.gr, meths.all = meths.all, updown = 3000)
