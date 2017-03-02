@@ -13,7 +13,7 @@ setup(
     version='0.0.1',
     description='refined bs-seq toolkit',
     long_description=long_description,
-    url='https://github.com/rahbz/pyBsHap',
+    url='https://github.com/rbpisupati/pyBsHap',
     author=['Rahul Pisupati'],
     author_email='rahul.bharadwaj.p@gmail.com',
     license='GMI',

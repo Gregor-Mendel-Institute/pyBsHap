@@ -200,3 +200,6 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
         AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
     meths.close()
     log.info("finished!")
+
+def getMethReadsgivenPosition(bamFile):
+    return 0
