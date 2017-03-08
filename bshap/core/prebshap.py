@@ -70,11 +70,15 @@ def decodeFlag(flag):
     notag = (12 - len(bintag)) * '0'
     return bintag + notag
 
-def getHighlightedSeqs(refseq, rseq, strand):
-    if strand == '0': ## forward, let C's stay
+def getStrandContext(strand):
+    if strand == '0': ## Forward read, count the number of C's
         re_string = ['C','T','.']
-    elif strand == '1':  ## G's should stay
+    elif strand == '1': ## reverse
         re_string = ['G', 'A',',']
+    return re_string
+
+def getHighlightedSeqs(refseq, rseq, strand):
+    re_string = getStrandContext(strand)
     dot_rseq = rseq
     for i,c in enumerate(refseq):
         if c.upper() != re_string[0]:
@@ -109,15 +113,12 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
     fin_rseq = char_add * (intersect_bed[0] - bin_bed[1]) + dot_rseq + char_add * (bin_bed[2] - intersect_bed[1])
     return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
 
+
+
 def getMethRead(tair10, binread):
     strand = decodeFlag(binread.flag)[4]
     error_rate = 0.01
-    if strand == '0': ## Forward read, count the number of C's
-        context = "C"
-        #reqstr = "T"   # if this is present the base is non methylated
-    elif strand == '1': ## reverse
-        context = "G"
-        #reqstr = "A"   # if this is present the base is non methylated
+    context = getStrandContext(strand)[0]
     mCs, tCs, read_length = [0,0,0], [0,0,0], 0
     for i,rind in binread.get_aligned_pairs():
         read_length = read_length + 1
@@ -156,7 +157,7 @@ def getMethWind(inBam, tair10, required_bed, meths):
         for binread in inBam.fetch(required_bed[0], bins, bins + binLen):
             rflag = decodeFlag(binread.flag)
             bin_bed = [required_bed[0], bins, bins + binLen]
-            if len(binread.get_aligned_pairs()) == 0 and rflag[10] != '0' and rflag[8] != '0': ## removing the duplicates
+            if len(binread.get_aligned_pairs()) == 0 or rflag[10] != '0' or rflag[8] != '0': ## removing the duplicates
                 continue        ## Skip the read if the alignment is not good ;)
             intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
             intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
@@ -164,9 +165,11 @@ def getMethWind(inBam, tair10, required_bed, meths):
             if intersect_len > read_length_thres:
                 permeths = getMethRead(tair10, binread) ## taking the first and last
                 binmeth.append(permeths)
-            bins_alignment.append(rseq_record)
+            if rflag[4] == '0':         ### Get only forward reads in the alignment
+                bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
+        import ipdb; ipdb.set_trace()
         reqmeths[progress_bins-1] = np.array(binmeth).T
         window_alignment.append(MultipleSeqAlignment(bins_alignment))
     return window_alignment
@@ -201,5 +204,25 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     meths.close()
     log.info("finished!")
 
-def getMethReadsgivenPosition(bamFile):
+def getCmatrix(bins_alignment, re_string):
+    num_seq = len(bins_alignment)
+    refseq = bins_alignment[0]
+    num_cs = str(refseq.seq).count(re_string[0])
+    wind_hap = np.zeros((num_cs, num_seq), dtype="int8")
+    wind_hap[wind_hap == 0] = -1
+    ind = 0
+    for ec in re.finditer(re_string[0], str(refseq.seq)):
+
+
+        ind = ind + 1
+
+def haplotypeBlocks(bins_alignment, strand = '0'):
+    re_string = getStrandContext(strand)
+    num_seq = len(bins_alignment)
+    if num_seq <= 1:
+        return 0
+    c_matrix = getCmatrix(bins_alignment, re_string)
+
+
+
     return 0
