@@ -286,7 +286,7 @@ setwd(output_fol)
 system(pybshap.command)
 meths.all <- fromJSON(paste("meths.", output_id,  ".json", sep = ""))
 
-
+row.names()
 meth.region.plot(check.gr = check.gr,  meths.all, updown = 5000)
 meth.region.plot.contexts(check.gr = check.gr, meths.all = meths.all, updown = 3000)
 

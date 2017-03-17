@@ -113,8 +113,6 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
     fin_rseq = char_add * (intersect_bed[0] - bin_bed[1]) + dot_rseq + char_add * (bin_bed[2] - intersect_bed[1])
     return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
 
-
-
 def getMethRead(tair10, binread):
     strand = decodeFlag(binread.flag)[4]
     error_rate = 0.01
@@ -165,8 +163,8 @@ def getMethWind(inBam, tair10, required_bed, meths):
             if intersect_len > read_length_thres:
                 permeths = getMethRead(tair10, binread) ## taking the first and last
                 binmeth.append(permeths)
-            if rflag[4] == '0':         ### Get only forward reads in the alignment
-                bins_alignment.append(rseq_record)
+                if rflag[4] == '0':         ### Get only forward reads in the alignment
+                    bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
         import ipdb; ipdb.set_trace()
@@ -204,25 +202,29 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     meths.close()
     log.info("finished!")
 
-def getCmatrix(bins_alignment, re_string):
+def getCmatrix(bins_alignment, strand):
+    # re_string = ['C','T','.']
+    re_string = getStrandContext(strand)
     num_seq = len(bins_alignment)
     refseq = bins_alignment[0]
     num_cs = str(refseq.seq).count(re_string[0])
-    wind_hap = np.zeros((num_cs, num_seq), dtype="int8")
+    wind_hap = np.zeros((num_seq-1, num_cs), dtype="int8")
     wind_hap[wind_hap == 0] = -1
     ind = 0
     for ec in re.finditer(re_string[0], str(refseq.seq)):
-
-
+        for seqind in range(1, num_seq):
+            seqNu = str(bins_alignment[seqind].seq)[ec.start()]
+            if seqNu.upper() == re_string[0]:
+                wind_hap[seqind-1, ind] = 1
+            elif seqNu.upper() == re_string[1]:
+                wind_hap[seqind-1, ind] = 0
         ind = ind + 1
+    return wind_hap
 
 def haplotypeBlocks(bins_alignment, strand = '0'):
-    re_string = getStrandContext(strand)
+    ## Here strand is to check C's or G's
     num_seq = len(bins_alignment)
     if num_seq <= 1:
         return 0
-    c_matrix = getCmatrix(bins_alignment, re_string)
-
-
-
-    return 0
+    c_matrix = getCmatrix(bins_alignment, strand)
+    return c_matrix
