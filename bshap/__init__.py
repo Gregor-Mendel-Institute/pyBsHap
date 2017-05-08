@@ -10,10 +10,11 @@ import os.path
 import argparse
 import sys
 from bshap.core import prebshap
+from bshap.core import bsseq
 import logging, logging.config
 
 __version__ = '0.0.1'
-__updated__ = "12.12.2016"
+__updated__ = "05.05.2017"
 __date__ = "10.12.2016"
 
 def setLog(logDebug):
@@ -44,6 +45,33 @@ def get_options(program_license,program_version_message):
   methbam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
   methbam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   methbam.set_defaults(func=bshap_methbam)
+  callmc_parser = subparsers.add_parser('callmc', help="Call mc using methylpy from fastq file")
+  callmc_parser.add_argument("-i", "--input_file", dest="inFile", help="Input fastq file for methylpy")
+  callmc_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
+  callmc_parser.add_argument("-r", "--ref_fol", dest="ref_fol", help="methylpy reference folder for indices and refid", default="/home/GMI/rahul.pisupati/TAiR10_ARABIDOPSIS/03.methylpy.indices/tair10")
+  callmc_parser.add_argument("-f", "--ref_fasta", dest="ref_fasta", help="reference fasta file", default="/home/GMI/rahul.pisupati/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta")
+  callmc_parser.add_argument("-n", "--nt", dest="nt", help="number of threads", default=2)
+  callmc_parser.add_argument("-c", "--unMethylatedControl", dest="unMeth", help="unmethylated control", default="ChrC:")
+  callmc_parser.add_argument("-m", "--mem", dest="memory", help="memory for sorting", default="2G")
+  callmc_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+  callmc_parser.set_defaults(func=callmcs_onesample)
+  dmr_parser = subparsers.add_parser('dmrfind', help="Identify DMR using methylpy")
+  dmr_parser.add_argument("-s", "--sample_ids", dest="sample_ids", help="sample ids, comma seperated")
+  dmr_parser.add_argument("-r", "--sample_categories", dest="sample_cat", help="sample categories indicating replicates, comma separated", default="0")
+  dmr_parser.add_argument("-p", "--path", dest="path_to_allc", help="path to allc files")
+  dmr_parser.add_argument("-c", "--context", dest="mc_type", help="methylation context, context separated")
+  dmr_parser.add_argument("-n", "--nt", dest="nt", help="number of threads", default=2)
+  dmr_parser.add_argument("-o", "--outDMR", dest="outDMR", help="output file for DMR")
+  dmr_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+  dmr_parser.set_defaults(func=dmrfind)
+  lowfreq_parser = subparsers.add_parser('callLowFreq', help="Get lowfreq positions from allc files")
+  lowfreq_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
+  lowfreq_parser.add_argument("-p", "--path", dest="path_to_allc", help="path to allc files")
+  lowfreq_parser.add_argument("-c", "--unMethylatedControl", dest="unMeth", help="unmethylated control", default="ChrC")
+  lowfreq_parser.add_argument("-e", "--pvalue_thres", dest="pvalue_thres", help="threshold for p-value to call low-freq site", default=0.05)
+  lowfreq_parser.add_argument("-o", "--outFile", dest="outFile", help="output h5py file")
+  lowfreq_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+  lowfreq_parser.set_defaults(func=lowfindfind)
   return inOptions
 
 def checkARGs(args):
@@ -61,6 +89,28 @@ def checkARGs(args):
 def bshap_methbam(args):
     checkARGs(args)
     prebshap.getMethGenome(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
+
+def callMPsfromVCF(args):
+  if not args['inFile']:
+    die("input file not specified")
+  if not args['outFile']:
+    die("output file not specified")
+  if not os.path.isfile(args['inFile']):
+    die("input file does not exist: " + args['inFile'])
+  bsseq.getMPsfromVCF(args)
+
+def callmcs_onesample(args):
+    if not args['inFile']:
+        die("input file not specified")
+    if not os.path.isfile(args['inFile']):
+        die("input file does not exist: " + args['inFile'])
+    bsseq.methylpy_callmcs(args)
+
+def dmrfind(args):
+    bsseq.methylpy_dmrfind(args)
+
+def lowfindfind(args):
+    bsseq.getLowFreqSites(args)
 
 def main():
   ''' Command line options '''

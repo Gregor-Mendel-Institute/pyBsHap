@@ -141,9 +141,10 @@ def getMethWind(inBam, tair10, required_bed, meths):
     read_length_thres = binLen/2
     bin_start = required_bed[1] - (required_bed[1] % binLen)
     estimated_bins = range(bin_start, required_bed[2], binLen)
-    dt = h5py.special_dtype(vlen=np.dtype('float16'))
-    reqmeths = meths.create_dataset(required_bed[0],compression="gzip", shape = (len(estimated_bins),4,), dtype=dt)
-    meths[required_bed[0]].attrs['positions'] = estimated_bins
+    #dt = h5py.special_dtype(vlen=np.dtype('float16'))
+    #reqmeths = meths.create_dataset(required_bed[0],compression="gzip", shape = (len(estimated_bins),4,), dtype=dt)
+    #meths[required_bed[0]].attrs['positions'] = estimated_bins
+    meths.create_dataset("bins_" + required_bed[0], data = estimated_bins)
     progress_bins = 0
     window_alignment = []  ## multiple segment alignment
     for bins in estimated_bins:        ## sliding windows with binLen
@@ -167,8 +168,8 @@ def getMethWind(inBam, tair10, required_bed, meths):
                     bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
-        import ipdb; ipdb.set_trace()
-        reqmeths[progress_bins-1] = np.array(binmeth).T
+        meths.create_dataset("b_" + required_bed[0] + "_" + str(bins),compression="gzip", data = np.array(binmeth))
+        #reqmeths[progress_bins-1] = np.array(binmeth).T
         window_alignment.append(MultipleSeqAlignment(bins_alignment))
     return window_alignment
 
