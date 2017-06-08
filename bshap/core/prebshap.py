@@ -132,6 +132,7 @@ def getMethRead(tair10, binread):
     rmeth = [float(mCs[i])/tCs[i] if tCs[i] > nc_thres else -1 for i in range(3)]
     tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) > nc_thres else -1
     permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
+    #permeths = [tmeth, mCs[0], mCs[1], mCs[2]]
     return permeths
     # We need to differentiate between the reads which are small and has no methylation
 
@@ -168,7 +169,8 @@ def getMethWind(inBam, tair10, required_bed, meths):
                     bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
-        meths.create_dataset("b_" + required_bed[0] + "_" + str(bins),compression="gzip", data = np.array(binmeth))
+        if np.array(binmeth).shape[0] > 0:
+            meths.create_dataset("b_" + required_bed[0] + "_" + str(bins + 1),compression="gzip", data = np.array(binmeth).T)
         #reqmeths[progress_bins-1] = np.array(binmeth).T
         window_alignment.append(MultipleSeqAlignment(bins_alignment))
     return window_alignment
