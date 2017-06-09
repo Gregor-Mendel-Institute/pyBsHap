@@ -45,9 +45,6 @@ getMethDensityPlot(meths)
 #araport.tes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TEs_201606.bed", as.is = T)
 araport.gff <- import.gff3("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
 
-getBreaksMeths <- function(check.gr, input_h5file)
-
-
 getMethWinds <- function(check.gr,input_h5file, updown){
   num.rows <- 10
   binlen = h5read(input_h5file, "binlen")
@@ -160,6 +157,40 @@ meth.region.plot.contexts <- function(check.gr,input_h5file, updown = 2000){
   legend("bottom", c("NA", 0,rep("", (10 - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
 
+getPCAmeths <- function(check.gr, input_h5file,title,updown=5000,k=3){
+  cex.plot <- 1.2
+  binlen <- h5read(input_h5file, "binlen")
+  input_bam <- h5read(input_h5file, "input_bam")
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
+  input_h5file_groups <- h5ls(input_h5file)
+  meths.contexts <- data.frame()
+  for(x in check.region){
+    H5close()
+    bin_name = paste("b", h5read(input_h5file, "chrs")[check.pos[1]], x, sep = "_")
+    if (bin_name %in% input_h5file_groups$name){
+      binmeths = h5read(input_h5file, bin_name)
+      binmeths[binmeths == -1] <- NA
+      meths.contexts <- rbind(meths.contexts, as.data.frame(na.omit(binmeths)))
+    }
+  }
+  colnames(meths.contexts) = c("CN","CG","CHG","CHH")
+  meths.contexts.filtered <- meths.contexts[which(meths.contexts$CN>0), c(2,3,4)]
+  #var(meths.contexts.filtered,na.rm=T,use="pairwise.complete.obs")
+  #pcont <- princomp(na.omit(meths.contexts.filtered), cor = TRUE, scores = TRUE)
+  #biplot(pcont)
+  #library("rgl")
+  #plot3d(pcont$scores[,1:3])
+  #plot(meths.contexts.filtered$CG, meths.contexts.filtered$CHG)
+  #library("ComplexHeatmap")
+  #library("reshape")
+  #Heatmap(meths.contexts.filtered,cluster_rows=T,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1])
+  di <- dist(meths.contexts.filtered,method="binary")
+  tree <- hclust(di, method="average")
+  plot(tree, main="Reads clustered based on their methylation states",xlab=paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), cex.lab = cex.plot, sub = paste(title, ",", input_h5file))
+  rect.hclust(tree, k = k, border="red")
+}
+
 
 ## Try checking this plots for different regions
 #### h5py FILES
@@ -175,6 +206,7 @@ names(bs.bams) <- c("root tip (Col-0)", "columella root cap cells (Col-0)", "ste
 
 ara.ind <- 161
 ara.ind <- 106
+ara.ind <- 107
 ara.ind <- 14468  ### ROS1 gene
 ara.ind <- 17145  ## DML-2 protein gene
 
@@ -183,6 +215,7 @@ check.gr <- araport.gff[ara.ind]
 
 i = 6
 input_file <- bs.bams[[i]]
+names(bs.bams)[i]
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
 updown <- 5000
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
@@ -194,6 +227,8 @@ input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 meth.region.plot(check.gr,input_h5file, updown = 2000)
 meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, updown = 2000)
 
+
+getPCAmeths(check.gr, input_h5file,title=names(bs.bams)[i])
 
 
 ##### ============================================
