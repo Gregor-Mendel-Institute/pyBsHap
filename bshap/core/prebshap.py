@@ -13,6 +13,8 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
+from sklearn.cluster import KMeans
+import json
 
 log = logging.getLogger(__name__)
 
@@ -132,11 +134,11 @@ def getMethRead(tair10, binread):
     rmeth = [float(mCs[i])/tCs[i] if tCs[i] > nc_thres else -1 for i in range(3)]
     tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) > nc_thres else -1
     permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
-    #permeths = [tmeth, mCs[0], mCs[1], mCs[2]]
+    #permeths = [tmeth, tCs[0], tCs[1], tCs[2]]
     return permeths
     # We need to differentiate between the reads which are small and has no methylation
 
-def getMethWind(inBam, tair10, required_bed, meths):
+def getMethWind(inBam, tair10, required_bed, meths = ''):
     # required_bed = ['Chr1', start, end, binLen]
     binLen = required_bed[3]
     read_length_thres = binLen/2
@@ -145,9 +147,11 @@ def getMethWind(inBam, tair10, required_bed, meths):
     #dt = h5py.special_dtype(vlen=np.dtype('float16'))
     #reqmeths = meths.create_dataset(required_bed[0],compression="gzip", shape = (len(estimated_bins),4,), dtype=dt)
     #meths[required_bed[0]].attrs['positions'] = estimated_bins
-    meths.create_dataset("bins_" + required_bed[0], data = estimated_bins)
+    if meths != '':
+        meths.create_dataset("bins_" + required_bed[0], data = estimated_bins)
     progress_bins = 0
-    window_alignment = []  ## multiple segment alignment
+    #window_alignment = []  ## multiple segment alignment
+    binmeth_whole = []
     for bins in estimated_bins:        ## sliding windows with binLen
         binmeth = []
         progress_bins += 1
@@ -165,15 +169,16 @@ def getMethWind(inBam, tair10, required_bed, meths):
             if intersect_len > read_length_thres:
                 permeths = getMethRead(tair10, binread) ## taking the first and last
                 binmeth.append(permeths)
+                binmeth_whole.append(permeths[1:4])
                 if rflag[4] == '0':         ### Get only forward reads in the alignment
                     bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
-            log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, estimated_bins))
-        if np.array(binmeth).shape[0] > 0:
+            log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
+        if np.array(binmeth).shape[0] > 0 and meths != '':
             meths.create_dataset("b_" + required_bed[0] + "_" + str(bins + 1),compression="gzip", data = np.array(binmeth).T)
         #reqmeths[progress_bins-1] = np.array(binmeth).T
-        window_alignment.append(MultipleSeqAlignment(bins_alignment))
-    return window_alignment
+        #window_alignment.append(MultipleSeqAlignment(bins_alignment))
+    return binmeth_whole
 
 def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     ## input a bam file, bin length
@@ -192,17 +197,46 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
         for cid, clen in zip(chrs, chrslen):     ## chromosome wise
             log.info("analysing chromosome: %s" % cid)
             required_bed = [cid, 0, clen, binLen]   ### 0 is to not print reads
-            window_alignment = getMethWind(inBam, tair10, required_bed, meths)
+            getMethWind(inBam, tair10, required_bed, meths)
+            log.info("finished!")
+            meths.close()
+            return 0
     else:
-        required_bed = interesting_region.split(',')
-        if len(required_bed) == 3:
-            required_bed = [required_bed[0], int(required_bed[1]), int(required_bed[2]), binLen, 0]
-        else:
-            die("error in the input bed position: chromosome,start,end")
+        required_region = interesting_region.split(',')
+        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        window_alignment = getMethWind(inBam, tair10, required_bed, meths)
-        AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
-    meths.close()
+        binmeth_whole = getMethWind(inBam, tair10, required_bed, meths)
+        if len(required_region) == 3:
+            #AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
+            (type_counts,type_freqs) = clusteringReads(binmeth_whole)
+            types_summary = {'counts': type_counts, 'region': interesting_region, 'input_bam': os.path.basename(bamFile), 'freqs': type_freqs}
+            with open('meths.' + outFile + '.summary.json', "w") as out_stats:
+                out_stats.write(json.dumps(types_summary))
+        meths.close()
+        log.info("finished!")
+        return binmeth_whole
+
+def getMethsRegions(bamFile, fastaFile, outFile, regionsFile):
+    ## Give a bed file for this
+    ## it should be tab delimited
+    log.info("loading the input files!")
+    inBam = pysam.AlignmentFile(bamFile, "rb")
+    (chrs, chrslen, binLen) = getChrs(inBam)
+    tair10 = Fasta(fastaFile)
+    log.info("done!")
+    outTxt = open('meths.' + outFile + '.summary.txt', 'w')
+    with open(regionsFile) as rFile:
+        for rline in rFile:
+            rline_split = rline.split('\t')
+            required_bed = [rline_split[0], int(rline_split[1]), int(rline_split[2]), binLen]
+            log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
+            binmeth_whole = getMethWind(inBam, tair10, required_bed, '')
+            (type_counts,type_freqs) = clusteringReads(binmeth_whole)
+            outTxt.write("%s" % rline_split[0] + ',' + rline_split[1]  + ',' + rline_split[2])
+            for i in range(len(type_counts)):
+                outTxt.write(",%s" % type_counts[i])
+            outTxt.write("\n")
+    outTxt.close()
     log.info("finished!")
 
 def getCmatrix(bins_alignment, strand):
@@ -231,3 +265,26 @@ def haplotypeBlocks(bins_alignment, strand = '0'):
         return 0
     c_matrix = getCmatrix(bins_alignment, strand)
     return c_matrix
+
+def countTypeFreqs(type_cls):
+    numCLs = 8
+    type_cls_freq = np.array(type_cls[1],dtype=float)/np.nansum(type_cls[1])
+    type_counts = []
+    type_freqs = []
+    for i in range(numCLs):
+        if len(np.where(type_cls[0] == i)[0]) > 0:
+            type_counts.append(type_cls[1][np.where(type_cls[0] == i)[0][0]])
+            type_freqs.append(type_cls_freq[np.where(type_cls[0] == i)[0][0]])
+        else:
+            type_counts.append(0)
+            type_freqs.append(0)
+    return type_counts,type_freqs
+
+def clusteringReads(binmeth_whole, n_clusters=8):
+    init_cls = np.array(((0,0,0),(1,0,0),(0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1), (1,1,1)), dtype=float)
+    binmeth_fiter = np.array(binmeth_whole)
+    binmeth_fiter[binmeth_fiter == -1] = np.nan  #### Removing the reads which do not have some information
+    binmeth_fiter = binmeth_fiter[~np.isnan(binmeth_fiter).any(axis=1)]
+    kmeans = KMeans(n_clusters=8, init=init_cls,n_init = 1).fit(binmeth_fiter)
+    type_cls = np.unique(kmeans.labels_, return_counts=True)
+    return countTypeFreqs(type_cls)

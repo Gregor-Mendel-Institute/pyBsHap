@@ -50,7 +50,7 @@ def get_options(program_license,program_version_message):
   callmc_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
   callmc_parser.add_argument("-r", "--ref_fol", dest="ref_fol", help="methylpy reference folder for indices and refid", default="/home/GMI/rahul.pisupati/TAiR10_ARABIDOPSIS/03.methylpy.indices/tair10")
   callmc_parser.add_argument("-f", "--ref_fasta", dest="ref_fasta", help="reference fasta file", default="/home/GMI/rahul.pisupati/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta")
-  callmc_parser.add_argument("-n", "--nt", dest="nt", help="number of threads", default=2)
+  callmc_parser.add_argument("-n", "--nt", dest="nt", help="number of threads", default=2,type=int)
   callmc_parser.add_argument("-c", "--unMethylatedControl", dest="unMeth", help="unmethylated control", default="ChrC:")
   callmc_parser.add_argument("-m", "--mem", dest="memory", help="memory for sorting", default="2G")
   callmc_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
@@ -60,7 +60,7 @@ def get_options(program_license,program_version_message):
   dmr_parser.add_argument("-r", "--sample_categories", dest="sample_cat", help="sample categories indicating replicates, comma separated", default="0")
   dmr_parser.add_argument("-p", "--path", dest="path_to_allc", help="path to allc files")
   dmr_parser.add_argument("-c", "--context", dest="mc_type", help="methylation context, context separated")
-  dmr_parser.add_argument("-n", "--nt", dest="nt", help="number of threads", default=2)
+  dmr_parser.add_argument("-n", "--nt", dest="nt", help="number of threads", default=2,type=int)
   dmr_parser.add_argument("-o", "--outDMR", dest="outDMR", help="output file for DMR")
   dmr_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   dmr_parser.set_defaults(func=dmrfind)
@@ -88,7 +88,10 @@ def checkARGs(args):
 
 def bshap_methbam(args):
     checkARGs(args)
-    prebshap.getMethGenome(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
+    if os.path.isfile(args['reqRegion']):
+        prebshap.getMethsRegions(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
+    else:
+        prebshap.getMethGenome(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
 
 def callMPsfromVCF(args):
   if not args['inFile']:

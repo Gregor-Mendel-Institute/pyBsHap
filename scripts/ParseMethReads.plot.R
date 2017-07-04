@@ -77,30 +77,28 @@ getMethWinds <- function(check.gr,input_h5file, updown){
   return(list(chrom.mat.cn, chrom.mat.cg, chrom.mat.chg, chrom.mat.chh))
 }
 
-meth.region.plot <- function(check.gr,input_h5file, updown = 2000){
+meth.region.plot <- function(check.gr,input_h5file, title="", updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   chrom.mat = getMethWinds(check.gr,input_h5file, updown)[[1]] ### Taking only the totals
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   input_bam <- h5read(input_h5file, "input_bam")
   binlen = h5read(input_h5file, "binlen")
-  par(resetPar())
   cex.plot <- 1.5
-  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste("input:", input_bam))
+  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste(title, ",", input_h5file))
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = as.integer(updown/binlen), labels = "start", lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)) - as.integer(updown/binlen), labels = "end", lwd.ticks = 5, line =0.5)
-   par(fig=c(0.8,0.93,0.8,0.83), new=T)
-   par(mar=c(0,0,0,0))
-   ylim <- length(meth.breaks) - 1
-   plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
-   axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
-   mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
-   for(z in seq(ylim)){
-     rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
-   }
-  par(resetPar())
+  #par(fig=c(0.8,0.93,0.8,0.83), new=T)
+  #par(mar=c(0,0,0,0))
+  #ylim <- length(meth.breaks) - 1
+  #plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
+  #axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
+  #mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
+  #for(z in seq(ylim)){
+  #  rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
+  #}
 }
 
 drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex.plot = 1.5){
@@ -157,7 +155,7 @@ meth.region.plot.contexts <- function(check.gr,input_h5file, updown = 2000){
   legend("bottom", c("NA", 0,rep("", (10 - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
 
-getPCAmeths <- function(check.gr, input_h5file,title,updown=5000,k=3){
+getPCAmeths <- function(check.gr, input_h5file,main,updown=5000,k=3){
   cex.plot <- 1.2
   binlen <- h5read(input_h5file, "binlen")
   input_bam <- h5read(input_h5file, "input_bam")
@@ -182,20 +180,22 @@ getPCAmeths <- function(check.gr, input_h5file,title,updown=5000,k=3){
   #library("rgl")
   #plot3d(pcont$scores[,1:3])
   #plot(meths.contexts.filtered$CG, meths.contexts.filtered$CHG)
-  #library("ComplexHeatmap")
-  #library("reshape")
-  #Heatmap(meths.contexts.filtered,cluster_rows=T,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1])
-  di <- dist(meths.contexts.filtered,method="binary")
-  tree <- hclust(di, method="average")
-  plot(tree, main="Reads clustered based on their methylation states",xlab=paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), cex.lab = cex.plot, sub = paste(title, ",", input_h5file))
-  rect.hclust(tree, k = k, border="red")
+  #
+  x_label <- paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", ")
+  file_label <- paste(main, ",", input_h5file)
+  draw(Heatmap(meths.contexts.filtered, row_title = file_label, column_title = x_label, cluster_rows=T,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = "% methylation", color_bar = "continuous")))
+  #di <- dist(meths.contexts.filtered,method="binary")
+  #tree <- hclust(di, method="average")
+  #plot(tree, main="Reads clustered based on their methylation states",xlab=x_label, cex.lab = cex.plot, sub = file_label)
+  #rect.hclust(tree, k = k, border="red")
 }
-
 
 ## Try checking this plots for different regions
 #### h5py FILES
 library(rhdf5)
 library(RColorBrewer)
+library("ComplexHeatmap")
+library("reshape")
 ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
 output_fol <- "~/Templates/"
 setwd(output_fol)
@@ -209,13 +209,16 @@ ara.ind <- 106
 ara.ind <- 107
 ara.ind <- 14468  ### ROS1 gene
 ara.ind <- 17145  ## DML-2 protein gene
+ara.ind <- which(elementMetadata(araport.gff)$ID == "AT5G23212")
 
 check.gr <- araport.gff[ara.ind]
 #check.gr <- subset(araport.gff, ID == "AT4G37650")
 
-i = 6
+
+
+i = 4
 input_file <- bs.bams[[i]]
-names(bs.bams)[i]
+
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
 updown <- 5000
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
@@ -224,11 +227,63 @@ system(pybshap.command)
 
 input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 
-meth.region.plot(check.gr,input_h5file, updown = 2000)
-meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, updown = 2000)
+#meth.region.plot(check.gr,input_h5file, updown = 2000, title = names(bs.bams)[i])
+#meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, updown = 2000)
 
+getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
 
-getPCAmeths(check.gr, input_h5file,title=names(bs.bams)[i])
+### looping
+#
+n = 12
+i = 4
+updown <- 2000
+
+zones=matrix(seq(n), ncol = 3, byrow = T)
+layout(zones)
+
+input_file <- bs.bams[[i]]
+names(bs.bams)[i]
+output_id <- strsplit(basename(input_file), "_")[[1]][1]
+#check.list <- sample(seq(length(araport.gff)), n)
+pdf("plot_met1.pdf")
+
+for (ara.ind in check.list){
+  check.gr <- araport.gff[ara.ind]
+  check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
+  pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
+  system(pybshap.command)
+  input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
+  getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
+  #meth.region.plot(check.gr,input_h5file, title=names(bs.bams)[i], updown = 2000)
+}
+
+dev.off()
+
+##___________
+round_int <- function(x, by=3){by*(as.integer(x/by)+as.logical(x%%by))}
+updown <- 2000
+
+ara.ind = 32131
+
+zones=matrix(seq(round_int(length(bs.bams))), ncol = 3, byrow = T)
+layout(zones)
+
+check.gr <- araport.gff[ara.ind]
+check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
+
+pdf("plot_gene.pdf")
+for (i in seq(length(bs.bams))){
+  input_file <- bs.bams[[i]]
+  output_id <- strsplit(basename(input_file), "_")[[1]][1]
+  pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
+  system(pybshap.command)
+  input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
+  getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
+  #meth.region.plot(check.gr,input_h5file, title=names(bs.bams)[i], updown = 2000)
+}
+dev.off()
+library("entropy")
+KL.plugin(c(0.1,0.2,0.4,0.3), c(0.2,0.2,0.3,0.3))
 
 
 ##### ============================================
