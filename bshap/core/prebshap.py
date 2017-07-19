@@ -13,7 +13,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
-from sklearn.cluster import KMeans
+#from sklearn.cluster import KMeans
 import json
 
 log = logging.getLogger(__name__)
@@ -227,7 +227,7 @@ def getMethsRegions(bamFile, fastaFile, outFile, regionsFile):
     outTxt = open('meths.' + outFile + '.summary.txt', 'w')
     with open(regionsFile) as rFile:
         for rline in rFile:
-            rline_split = rline.split('\t')
+            rline_split = rline.rstrip().split('\t')
             required_bed = [rline_split[0], int(rline_split[1]), int(rline_split[2]), binLen]
             log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
             binmeth_whole = getMethWind(inBam, tair10, required_bed, '')
@@ -284,7 +284,12 @@ def clusteringReads(binmeth_whole, n_clusters=8):
     init_cls = np.array(((0,0,0),(1,0,0),(0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1), (1,1,1)), dtype=float)
     binmeth_fiter = np.array(binmeth_whole)
     binmeth_fiter[binmeth_fiter == -1] = np.nan  #### Removing the reads which do not have some information
-    binmeth_fiter = binmeth_fiter[~np.isnan(binmeth_fiter).any(axis=1)]
-    kmeans = KMeans(n_clusters=8, init=init_cls,n_init = 1).fit(binmeth_fiter)
-    type_cls = np.unique(kmeans.labels_, return_counts=True)
-    return countTypeFreqs(type_cls)
+    try:
+        binmeth_fiter = binmeth_fiter[~np.isnan(binmeth_fiter).any(axis=1)]
+        kmeans = KMeans(n_clusters=8, init=init_cls,n_init = 1).fit(binmeth_fiter)
+        type_cls = np.unique(kmeans.labels_, return_counts=True)
+        return countTypeFreqs(type_cls)
+    except:
+        type_counts = [0,0,0,0,0,0,0,0]
+        type_freqs = [0,0,0,0,0,0,0,0]
+        return type_counts,type_freqs
