@@ -114,6 +114,7 @@ drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex
     bin_name = paste("b", h5read(input_h5file, "chrs")[check.pos[1]], check.region[xind], sep = "_")
     if (bin_name %in% input_h5file_groups$name){
       binmeths = h5read(input_h5file, bin_name)
+      binmeths <- binmeths[order(binmeths[,2], binmeths[,3], binmeths[,4]),]
       if (xind %% 10 == 0){
         abline(v = xind, col = "gray60", lty = 2)
         }
@@ -125,7 +126,7 @@ drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex
   }
 }
 
-meth.region.plot.contexts <- function(check.gr,input_h5file, updown = 2000){
+meth.region.plot.contexts <- function(check.gr,input_h5file, mtitle = "", updown = 2000){
   binlen <- h5read(input_h5file, "binlen")
   input_bam <- h5read(input_h5file, "input_bam")
   check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
@@ -151,7 +152,7 @@ meth.region.plot.contexts <- function(check.gr,input_h5file, updown = 2000){
   axis(1, at = length(check.region) - as.integer(updown/binlen), labels = "end", lwd.ticks = 5, line =0.5)
   plot.new()
   mtext(text=paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), cex = cex.plot, line = -3)
-  mtext(text=paste("input:", input_bam), cex = 1, line = -5)
+  mtext(text= paste(mtitle, ",", input_h5file), cex = 1, line = -5)
   legend("bottom", c("NA", 0,rep("", (10 - 3)), 1), fill=meth.colors, horiz = T, border = F, cex = cex.plot, bty = "n")
 }
 
@@ -200,35 +201,39 @@ ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
 output_fol <- "~/Templates/"
 setwd(output_fol)
 
-bs.bams <- c("/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam")
+bs.bams <- c("/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam")
 bs.bams <- as.list(bs.bams)
-names(bs.bams) <- c("root tip (Col-0)", "columella root cap cells (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)")
+names(bs.bams) <- c("root tip (Col-0)", "columella root cap cells (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)")
 
 ara.ind <- 161
 ara.ind <- 106
 ara.ind <- 107
 ara.ind <- 14468  ### ROS1 gene
 ara.ind <- 17145  ## DML-2 protein gene
-ara.ind <- which(elementMetadata(araport.gff)$ID == "AT5G23212")
+ara.ind <- which(elementMetadata(araport.gff)$ID == "AT1G65960")
+
+
+which(as.character(seqnames(araport.gff)) == "ChrC")
+ara.ind <- 37945
+
 
 check.gr <- araport.gff[ara.ind]
 #check.gr <- subset(araport.gff, ID == "AT4G37650")
 
-
-
 i = 4
+names(bs.bams)[i]
 input_file <- bs.bams[[i]]
 
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
-updown <- 5000
+updown <- 3000
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
 pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
 system(pybshap.command)
 
 input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 
-#meth.region.plot(check.gr,input_h5file, updown = 2000, title = names(bs.bams)[i])
-#meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, updown = 2000)
+#meth.region.plot(check.gr,input_h5file, updown = updown, title = names(bs.bams)[i])
+meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown)
 
 getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
 

@@ -23,8 +23,13 @@ plot_heatmap <- function(methreads.dir, methreads.file, i, cluster_wt=NULL, req_
   test.mut <- read.csv(file = file.path(methreads.dir, as.character(methreads.file)[i]), header = F)
   colnames(test.mut) <- get("init_cls", envir = .GlobalEnv)
   #req.mat <- na.omit(test.mut[,c(5,6,7,8,9,10,11)]/rowSums(test.mut[,c(5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
+  #### Just taking the number of reads as logarthimic number
   req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
   req.mat[req.mat == -Inf] = 0
+  ## Taking fracion now with the total reads and logarithmic
+  req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])))  ## Gene fractions filtering non methylated
+  req.mat[req.mat == -Inf] = 0
+  
   #req.mat <- na.omit((sum(rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))*test.mut[,c(5,6,7,8,9,10,11)])/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))  ### Conditional probability on the number of reads matching
   #
   if(!is.null(top)){

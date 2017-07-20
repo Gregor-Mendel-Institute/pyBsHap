@@ -27,8 +27,11 @@ setup(
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     install_requires=[
         "numpy >=1.9.0",
+        "scipy >=0.17.0",
         "pysam",
-        "pyfaidx"
+        "pyfaidx",
+        "methylpy",
+        "cutadapt"
     ],
     entry_points={
         'console_scripts': [
