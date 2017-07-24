@@ -2,12 +2,14 @@
 library(jsonlite)
 library(RColorBrewer)
 library(rtracklayer)
+library(data.table)
 resetPar <- function() {
   dev.new()
   op <- par(no.readonly = TRUE)
   dev.off()
   op
 }
+context.colors <- brewer.pal(3, "Set2")
 
 ## Histogram for methylation in reads
 ## 
@@ -45,6 +47,59 @@ getMethDensityPlot(meths)
 #araport.tes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TEs_201606.bed", as.is = T)
 araport.gff <- import.gff3("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
 
+getMethylationAverages <- function(binmeths, ind = 1){
+  finAvg = NA
+  if (ind == 1){
+    finAvg <- sum(binmeths$mC) / sum(binmeths$tC)
+  } else if (ind == 2){ ## Get the number of methylated positions
+    finAvg <- mean(binmeths$call)
+  } else if (ind == 3){  ### Get the normal average
+    finAvg <- mean(mapply(FUN = function(x, y){x / y}, binmeths$mC, binmeths$tC))
+  }
+  return(finAvg)
+}
+
+getWMA_default_plot <- function(check.gr, input_h5file, meths_fol, input_id, updown, title = "", getMethInd = 1, binlen = 300){
+  yaxis.labs <- c("Weighted methylation average", "Average methylated positions", "Average methylation levels")
+  #binlen = h5read(input_h5file, "binlen")
+  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  #check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
+  check.region <- seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen)
+  meth.files <- list.files(meths_fol, pattern = paste("^allc_", input_id, "_.*[12345].tsv", sep = ""))
+  bs.mC <- fread(file.path(meths_fol, meth.files[check.pos[1]]), showProgress = T)
+  colnames(bs.mC) <- c("chr", "pos", "strand", "context", "mC", "tC", "call")
+  bs.mC <- subset(bs.mC, pos >= check.pos[2] - 100 & pos <= check.pos[3] + 100)
+  weightedAvg.meths.cn <- numeric()
+  weightedAvg.meths.cg <- numeric()
+  weightedAvg.meths.chg <- numeric()
+  weightedAvg.meths.chh <- numeric()
+  Avg.cytosines.meths <- numeric()
+  for (i in check.region){
+    binmeths <- subset(bs.mC, pos >= i & pos < i + binlen)
+    cg.ind <- which(grepl("CG", binmeths$context, perl = T))
+    chg.ind <- which(grepl("C[ATC]G", binmeths$context, perl = T))
+    chh.ind <- which(grepl("C[ATC][ATC]", binmeths$context, perl = T))
+    Avg.cytosines.meths <- rbind(Avg.cytosines.meths, cbind(binmeths$pos, mapply(FUN = function(x, y){x / y}, binmeths$mC, binmeths$tC), 1))
+    Avg.cytosines.meths[chg.ind, 3] <- 2
+    Avg.cytosines.meths[chh.ind, 3] <- 3
+    weightedAvg.meths.cg <- c(weightedAvg.meths.cg, getMethylationAverages(binmeths[cg.ind, ], ind = getMethInd))
+    weightedAvg.meths.chg <- c(weightedAvg.meths.chg, getMethylationAverages(binmeths[chg.ind,], ind = getMethInd))
+    weightedAvg.meths.chh <- c(weightedAvg.meths.chh, getMethylationAverages(binmeths[chh.ind,], ind = getMethInd))
+    weightedAvg.meths.cn <- c(weightedAvg.meths.cn, getMethylationAverages(binmeths, ind = getMethInd))
+  }
+  plot(x = check.region, y = weightedAvg.meths.cn, ylim = c(0, 1), ylab = yaxis.labs[getMethInd], cex.lab = cex.plot, xaxt = "n", type = "l", lwd = 2, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste(title, ",", input_h5file))
+  points(x = check.region, y = weightedAvg.meths.cg, type = "l", lwd = 2, col = context.colors[1])
+  points(x = check.region, y = weightedAvg.meths.chg, type = "l", lwd = 2, col = context.colors[2])
+  points(x = check.region, y = weightedAvg.meths.chh, type = "l", lwd = 2, col = context.colors[3])
+  #points(x = Avg.cytosines.meths[,1], Avg.cytosines.meths[,2], col = context.colors[Avg.cytosines.meths[,3]], pch = 19)
+  legend("topright", legend = c("CG", "CHG", "CHH"), fill = context.colors)
+  axis(1, at = check.region[1], labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = start(check.gr), labels = "start", lwd.ticks = 5, line =0.5)
+  axis(1, at = check.region[length(check.region)], labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
+  axis(1, at = end(check.gr), labels = "end", lwd.ticks = 5, line =0.5)
+}
+
+
 getMethWinds <- function(check.gr,input_h5file, updown){
   num.rows <- 10
   binlen = h5read(input_h5file, "binlen")
@@ -81,7 +136,7 @@ meth.region.plot <- function(check.gr,input_h5file, title="", updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   chrom.mat = getMethWinds(check.gr,input_h5file, updown)[[1]] ### Taking only the totals
-  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[num.rows:2])
   input_bam <- h5read(input_h5file, "input_bam")
   binlen = h5read(input_h5file, "binlen")
   cex.plot <- 1.5
@@ -100,6 +155,7 @@ meth.region.plot <- function(check.gr,input_h5file, title="", updown = 2000){
   #  rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
   #}
 }
+
 
 drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex.plot = 1.5){
   num.rows <- 10
@@ -201,9 +257,9 @@ ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
 output_fol <- "~/Templates/"
 setwd(output_fol)
 
-bs.bams <- c("/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam")
+bs.bams <- c("/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534177/SRR534177_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam")
 bs.bams <- as.list(bs.bams)
-names(bs.bams) <- c("root tip (Col-0)", "columella root cap cells (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)")
+names(bs.bams) <- c("WT, Stroud et. al. (Col-0)", "root tip (Col-0)", "columella root cap cells (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)")
 
 ara.ind <- 161
 ara.ind <- 106
@@ -220,7 +276,10 @@ ara.ind <- 37945
 check.gr <- araport.gff[ara.ind]
 #check.gr <- subset(araport.gff, ID == "AT4G37650")
 
-i = 4
+i = 1
+i = 5
+i = 7
+i = 9
 names(bs.bams)[i]
 input_file <- bs.bams[[i]]
 
@@ -236,6 +295,8 @@ input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown)
 
 getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
+
+getWMA_default_plot(check.gr = check.gr, input_h5file = input_h5file, updown = updown, meths_fol = dirname(as.character(bs.bams[i])), input_id = output_id, title = names(bs.bams)[i], getMethInd = 1, binlen = 500)
 
 ### looping
 #
