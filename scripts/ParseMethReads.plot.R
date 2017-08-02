@@ -45,7 +45,7 @@ getMethDensityPlot(meths)
 #araport.te.gene <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TE_gene.201606.bed", as.is = T)
 #araport.genes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_genes_201606.bed", as.is = T)
 #araport.tes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_TEs_201606.bed", as.is = T)
-araport.gff <- import.gff3("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
+araport.gff <- import("/vol/HOME/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
 
 getMethylationAverages <- function(binmeths, ind = 1){
   finAvg = NA
@@ -62,7 +62,8 @@ getMethylationAverages <- function(binmeths, ind = 1){
 getWMA_default_plot <- function(check.gr, input_h5file, meths_fol, input_id, updown, title = "", getMethInd = 1, binlen = 300){
   yaxis.labs <- c("Weighted methylation average", "Average methylated positions", "Average methylation levels")
   #binlen = h5read(input_h5file, "binlen")
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  meths.chrs <- h5read(input_h5file, "chrs")
+  check.pos <- c(which(meths.chrs == as.character(seqnames(check.gr))), start(check.gr) - updown, end(check.gr) + updown)
   #check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
   check.region <- seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen)
   meth.files <- list.files(meths_fol, pattern = paste("^allc_", input_id, "_.*[12345].tsv", sep = ""))
@@ -103,14 +104,15 @@ getWMA_default_plot <- function(check.gr, input_h5file, meths_fol, input_id, upd
 getMethWinds <- function(check.gr,input_h5file, updown){
   num.rows <- 10
   binlen = h5read(input_h5file, "binlen")
+  meths.chrs <- h5read(input_h5file, "chrs")
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  check.pos <- c(which(meths.chrs == as.character(seqnames(check.gr))), start(check.gr) - updown, end(check.gr) + updown)
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
   chrom.mat.cn = chrom.mat.cg = chrom.mat.chg = chrom.mat.chh = numeric()
   input_h5file_groups <- h5ls(input_h5file)
   for (x in check.region){
     H5close()
-    bin_name = paste("b", h5read(input_h5file, "chrs")[check.pos[1]], x, sep = "_")
+    bin_name = paste("b", meths.chrs[check.pos[1]], x, sep = "_")
     if (bin_name %in% input_h5file_groups$name){
       binmeths = h5read(input_h5file, bin_name)
       ## context inds cg = 2, chg = 3, chh = 4
@@ -145,29 +147,29 @@ meth.region.plot <- function(check.gr,input_h5file, title="", updown = 2000){
   axis(1, at = as.integer(updown/binlen), labels = "start", lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)) - as.integer(updown/binlen), labels = "end", lwd.ticks = 5, line =0.5)
-  #par(fig=c(0.8,0.93,0.8,0.83), new=T)
-  #par(mar=c(0,0,0,0))
-  #ylim <- length(meth.breaks) - 1
-  #plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
-  #axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
-  #mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
-  #for(z in seq(ylim)){
-  #  rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
-  #}
+  par(fig=c(0.8,0.93,0.8,0.83), new=T)
+  par(mar=c(0,0,0,0))
+  ylim <- length(meth.breaks) - 1
+  plot(0, type='n', ann=F, axes=F, xaxs="i", yaxs="i", ylim=c(0,1), xlim=c(0,ylim))
+  axis(1, at=c(1.5, ylim), labels=c(0, 1), tick=FALSE, line=-1.2, las=1, cex.axis = cex.plot * 0.8)
+  mtext(text="% methylation", las=1, side=3, line=0, outer=FALSE, cex=cex.plot)
+  for(z in seq(ylim)){
+    rect(z-1, 0, z, 1, col=meth.colors[z], border='black', lwd=0.5)
+  }
 }
-
 
 drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex.plot = 1.5){
   num.rows <- 10
-  binlen <- h5read(input_h5file, "binlen")
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
-  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
+  binlen = h5read(input_h5file, "binlen")
+  meths.chrs <- h5read(input_h5file, "chrs")
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
+  check.pos <- c(which(meths.chrs == as.character(seqnames(check.gr))), start(check.gr) - updown, end(check.gr) + updown)
+  check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
   meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   plot(-10, -10, xlim = c(0, length(check.region)), ylim = c(0, max_reads + 30), ylab = "Number of reads", xaxt = "n", xlab = "", cex.lab = cex.plot, frame.plot=FALSE)
   input_h5file_groups <- h5ls(input_h5file)
   for (xind in seq(length(check.region))){
-    bin_name = paste("b", h5read(input_h5file, "chrs")[check.pos[1]], check.region[xind], sep = "_")
+    bin_name = paste("b", meths.chrs[check.pos[1]], check.region[xind], sep = "_")
     if (bin_name %in% input_h5file_groups$name){
       binmeths = h5read(input_h5file, bin_name)
       binmeths <- binmeths[order(binmeths[,2], binmeths[,3], binmeths[,4]),]
@@ -182,15 +184,16 @@ drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex
   }
 }
 
-meth.region.plot.contexts <- function(check.gr,input_h5file, mtitle = "", updown = 2000){
-  binlen <- h5read(input_h5file, "binlen")
+meth.region.plot.contexts <- function(check.gr,input_h5file, mtitle = "", updown = 2000,max_reads = 40){
+  binlen = h5read(input_h5file, "binlen")
+  meths.chrs <- h5read(input_h5file, "chrs")
+  check.pos <- c(which(meths.chrs == as.character(seqnames(check.gr))), start(check.gr) - updown, end(check.gr) + updown)
   input_bam <- h5read(input_h5file, "input_bam")
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
-  max_reads = 40
   num.rows = 10
   cex.plot = 1.5
-  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[num.rows:2])
+  #meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
   zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
   layout(zones)
   par(mar=c(1,4.5,1,2))
@@ -214,15 +217,17 @@ meth.region.plot.contexts <- function(check.gr,input_h5file, mtitle = "", updown
 
 getPCAmeths <- function(check.gr, input_h5file,main,updown=5000,k=3){
   cex.plot <- 1.2
-  binlen <- h5read(input_h5file, "binlen")
   input_bam <- h5read(input_h5file, "input_bam")
-  check.pos <- c(as.numeric(sub("Chr", "", as.character(seqnames(check.gr)), ignore.case = T)), start(check.gr) - updown, end(check.gr) + updown)
+  binlen = h5read(input_h5file, "binlen")
+  meths.chrs <- h5read(input_h5file, "chrs")
+  meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
+  check.pos <- c(which(meths.chrs == as.character(seqnames(check.gr))), start(check.gr) - updown, end(check.gr) + updown)
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
   input_h5file_groups <- h5ls(input_h5file)
   meths.contexts <- data.frame()
   for(x in check.region){
     H5close()
-    bin_name = paste("b", h5read(input_h5file, "chrs")[check.pos[1]], x, sep = "_")
+    bin_name = paste("b", meths.chrs[check.pos[1]], x, sep = "_")
     if (bin_name %in% input_h5file_groups$name){
       binmeths = h5read(input_h5file, bin_name)
       binmeths[binmeths == -1] <- NA
@@ -256,6 +261,7 @@ library("reshape")
 ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
 output_fol <- "~/Templates/"
 setwd(output_fol)
+Sys.setenv("PATH" = paste(Sys.getenv("PATH"), "~/py2_kernel/bin", sep = ":"))
 
 bs.bams <- c("/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534177/SRR534177_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam")
 bs.bams <- as.list(bs.bams)
@@ -269,8 +275,7 @@ ara.ind <- 17145  ## DML-2 protein gene
 ara.ind <- which(elementMetadata(araport.gff)$ID == "AT1G65960")
 
 
-which(as.character(seqnames(araport.gff)) == "ChrC")
-ara.ind <- 37945
+ara.ind <- which(as.character(seqnames(araport.gff)) == "ChrC")[4]
 
 
 check.gr <- araport.gff[ara.ind]
@@ -284,19 +289,31 @@ names(bs.bams)[i]
 input_file <- bs.bams[[i]]
 
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
-updown <- 3000
+updown <- 2000
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
+#check_pos <- "ChrC,1,154478"   #### Checking ChrC for the reads
 pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
+
 system(pybshap.command)
 
 input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 
 #meth.region.plot(check.gr,input_h5file, updown = updown, title = names(bs.bams)[i])
-meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown)
+meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown, max_reads = 40)
+dev.off()
 
 getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
 
 getWMA_default_plot(check.gr = check.gr, input_h5file = input_h5file, updown = updown, meths_fol = dirname(as.character(bs.bams[i])), input_id = output_id, title = names(bs.bams)[i], getMethInd = 1, binlen = 500)
+
+
+#### Check the reads mapped to the chroloplast genome
+
+check_pos <- "ChrC,1,"
+
+
+
+
 
 ### looping
 #

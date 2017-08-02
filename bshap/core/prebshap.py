@@ -33,7 +33,8 @@ def getChrs(inBam):
         binLen = np.append(binLen, tread.infer_query_length())
         if len(binLen) >= 100:
             break
-    return (reqchrs, reqchrslen, int(np.nanmean(binLen)))
+    #return (reqchrs, reqchrslen, int(np.nanmean(binLen)))
+    return (chrs, chrslen, int(np.nanmean(binLen)))
 
 def get_reverse_complement(seq):
     old_chars = "ACGT"
@@ -284,7 +285,8 @@ def clusteringReads(binmeth_whole, n_clusters=8):
     init_cls = np.array(((0,0,0),(1,0,0),(0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1), (1,1,1)), dtype=float)
     binmeth_fiter = np.array(binmeth_whole)
     binmeth_fiter[binmeth_fiter == -1] = np.nan  #### Removing the reads which do not have some information
-    try:
+    try:    ### This is a very dangerous conditional statement to put
+    ### Capturing the exact error would be good!
         binmeth_fiter = binmeth_fiter[~np.isnan(binmeth_fiter).any(axis=1)]
         kmeans = KMeans(n_clusters=8, init=init_cls,n_init = 1).fit(binmeth_fiter)
         type_cls = np.unique(kmeans.labels_, return_counts=True)

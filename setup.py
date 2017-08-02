@@ -31,7 +31,8 @@ setup(
         "pysam",
         "pyfaidx",
         "methylpy",
-        "cutadapt"
+        "cutadapt",
+        "biopython"
     ],
     entry_points={
         'console_scripts': [
