@@ -281,6 +281,8 @@ ara.ind <- which(as.character(seqnames(araport.gff)) == "ChrC")[4]
 check.gr <- araport.gff[ara.ind]
 #check.gr <- subset(araport.gff, ID == "AT4G37650")
 
+#check.gr <- GRanges(seqnames = c("ChrC"), ranges = IRanges(start = 1, end = 154478), Name = "ChrC", type = "whole chroloplast genome")   ### Entire ChrC
+
 i = 1
 i = 5
 i = 7
@@ -289,9 +291,9 @@ names(bs.bams)[i]
 input_file <- bs.bams[[i]]
 
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
-updown <- 2000
+updown <- 0
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
-#check_pos <- "ChrC,1,154478"   #### Checking ChrC for the reads
+
 pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
 
 system(pybshap.command)
@@ -302,17 +304,9 @@ input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown, max_reads = 40)
 dev.off()
 
-getPCAmeths(check.gr, input_h5file,main=names(bs.bams)[i])
+getPCAmeths(check.gr, input_h5file, main=names(bs.bams)[i], updown = updown)
 
 getWMA_default_plot(check.gr = check.gr, input_h5file = input_h5file, updown = updown, meths_fol = dirname(as.character(bs.bams[i])), input_id = output_id, title = names(bs.bams)[i], getMethInd = 1, binlen = 500)
-
-
-#### Check the reads mapped to the chroloplast genome
-
-check_pos <- "ChrC,1,"
-
-
-
 
 
 ### looping
