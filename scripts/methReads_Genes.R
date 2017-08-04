@@ -13,25 +13,44 @@ araport.gff <- import("~/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606
 araport.genes <- read.table("~/ARAPORT11/Araport11_GFF3_genes_201606.bed", as.is = T)
 
 
-output_fol <- "/lustre/scratch/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
+output_fol <- "/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
 setwd(output_fol)
 
 init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
 
+getReqMat <- function(test.mut, case = 1){
+  if (case == 1){
+    ### Taking the fraction of each cluster with total reads mapped to the gene
+    req.mat <- test.mut[,c(4,5,6,7,8,9,10,11)]/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])  ## Gene fractions filtering non methylated
+    req.mat <- na.omit(req.mat)
+    req.mat.description <- "Fraction of reads\nin each cluster"
+  } else if (case == 2) {
+    #### Just taking the number of reads as logarthimic number
+    req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
+    req.mat[req.mat == -Inf] = 0
+    req.mat.description <- "Log10 \nnumber of reads"
+  } else if (case == 3){
+    ## Taking fracion now with the total reads and logarithmic
+    req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])))  ## Gene fractions filtering non methylated
+    req.mat[req.mat == -Inf] = 0
+    req.mat.description <- "Log10 \n fraction of reads in each cluster"
+  } else if (case == 4) {
+    ## Conditional probability on the number of reads matching
+    req.mat <- na.omit((sum(rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))*test.mut[,c(5,6,7,8,9,10,11)])/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))
+    req.mat.description <- "Conditional probability on the number of reads matching"
+  }
+  return(list(req.mat, req.mat.description))
+}
+
+
 ### Checking each single file......
-plot_heatmap <- function(methreads.dir, methreads.file, i, cluster_wt=NULL, req_cols = NULL, top = NULL){
+plot_heatmap <- function(methreads.dir, methreads.file, i, cluster_wt=NULL, req_cols = NULL, top = NULL, case = 2){
   test.mut <- read.csv(file = file.path(methreads.dir, as.character(methreads.file)[i]), header = F)
   colnames(test.mut) <- get("init_cls", envir = .GlobalEnv)
-  #req.mat <- na.omit(test.mut[,c(5,6,7,8,9,10,11)]/rowSums(test.mut[,c(5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
-  #### Just taking the number of reads as logarthimic number
-  req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
-  req.mat[req.mat == -Inf] = 0
-  ## Taking fracion now with the total reads and logarithmic
-  req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])))  ## Gene fractions filtering non methylated
-  req.mat[req.mat == -Inf] = 0
+  req.mat.list <- getReqMat(test.mut, case = case)
+  req.mat <- req.mat.list[[1]]
+  req.mat.description <- req.mat.list[[2]]
   
-  #req.mat <- na.omit((sum(rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))*test.mut[,c(5,6,7,8,9,10,11)])/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))  ### Conditional probability on the number of reads matching
-  #
   if(!is.null(top)){
     req.mat <- req.mat[1:top,]
   } else{
@@ -42,14 +61,13 @@ plot_heatmap <- function(methreads.dir, methreads.file, i, cluster_wt=NULL, req_
   }
   
   if(!is.null(cluster_wt)){
-    draw(Heatmap(req.mat, cluster_rows=cluster_wt,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = "Log10 \nnumber of reads", color_bar = "continuous"), row_title = paste("Reads mapped to genes in", names(methreads.file)[i])))
+    draw(Heatmap(req.mat, cluster_rows=cluster_wt,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = req.mat.description, color_bar = "continuous"), row_title = paste("Reads mapped to genes in", names(methreads.file)[i])))
   } else{
-    draw(Heatmap(req.mat, cluster_rows=T,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = "Log10 \nnumber of reads", color_bar = "continuous"), row_title = paste("Reads mapped to genes in", names(methreads.file)[i])))
+    draw(Heatmap(req.mat, cluster_rows=T,cluster_columns =F, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = req.mat.description, color_bar = "continuous"), row_title = paste("Reads mapped to genes in", names(methreads.file)[i])))
   }
-  
 }
 
-mutant.data$Run_s[which(mutant.data$genotype_s == "cmt2")]
+mutant.data$Run_s[which(mutant.data$genotype_s == "met1")]
 
 methreads.dir <- "/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
 
@@ -59,13 +77,26 @@ names(methreads.file) <- c("WT (Col-0)", "met1 (Col-0)", "met1 cmt3 (Col-0)", "n
 
 top <- 1500
 req_cols <- c(1,2,8)
-i = 1
+i = 2
 names(methreads.file)[i]
 test.mut <- read.csv(file = file.path(methreads.dir, as.character(methreads.file)[i]), header = F)
 colnames(test.mut) <- get("init_cls", envir = .GlobalEnv)
-req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
-req.mat[req.mat == -Inf] = 0
-req.mat <- req.mat[1:top,]
+
+
+req.mat.list <- getReqMat(test.mut, case = 1)
+req.mat <- req.mat.list[[1]][1:top,]
+
+hist(req.mat.list[[1]][,8][which(req.mat.list[[1]][,8] > 0.003)], breaks = 500)
+
+which(req.mat.list[[1]][,8] > 0.003)
+
+total.reads.genes <- rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])
+total.reads.genes <- total.reads.genes[which(total.reads.genes > 0)]
+
+
+plot(total.reads.genes, req.mat.list[[1]][,8], pch = 19)
+
+
 
 cluster_wt <- hclust(dist(req.mat, method = "binary"))
 

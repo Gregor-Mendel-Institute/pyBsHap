@@ -13,7 +13,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
-#from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans
 import json
 
 log = logging.getLogger(__name__)
@@ -134,8 +134,9 @@ def getMethRead(tair10, binread):
     nc_thres = 0
     rmeth = [float(mCs[i])/tCs[i] if tCs[i] > nc_thres else -1 for i in range(3)]
     tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) > nc_thres else -1
-    permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
+    #permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
     #permeths = [tmeth, tCs[0], tCs[1], tCs[2]]
+    permeths = [tmeth, tCs[0], rmeth[0], tCs[1], rmeth[1], tCs[2], rmeth[2]]
     return permeths
     # We need to differentiate between the reads which are small and has no methylation
 
@@ -169,8 +170,8 @@ def getMethWind(inBam, tair10, required_bed, meths = ''):
             rseq_record = getSeqRecord(binread, tair10, bin_bed, intersect_bed) ## No need to check for the overlap to print the alignment
             if intersect_len > read_length_thres:
                 permeths = getMethRead(tair10, binread) ## taking the first and last
-                binmeth.append(permeths)
-                binmeth_whole.append(permeths[1:4])
+                binmeth.append([permeths[i] for i in [0,2,4,6]])
+                binmeth_whole.append(permeths)
                 if rflag[4] == '0':         ### Get only forward reads in the alignment
                     bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
@@ -207,6 +208,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
         binmeth_whole = getMethWind(inBam, tair10, required_bed, meths)
+        import ipdb; ipdb.set_trace()
         if len(required_region) == 3:
             #AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
             (type_counts,type_freqs) = clusteringReads(binmeth_whole)
@@ -286,12 +288,11 @@ def clusteringReads(binmeth_whole, n_clusters=8):
     binmeth_fiter = np.array(binmeth_whole)
     binmeth_fiter[binmeth_fiter == -1] = np.nan  #### Removing the reads which do not have some information
     try:    ### This is a very dangerous conditional statement to put
-    ### Capturing the exact error would be good!
         binmeth_fiter = binmeth_fiter[~np.isnan(binmeth_fiter).any(axis=1)]
         kmeans = KMeans(n_clusters=8, init=init_cls,n_init = 1).fit(binmeth_fiter)
         type_cls = np.unique(kmeans.labels_, return_counts=True)
         return countTypeFreqs(type_cls)
-    except:
+    except ValueError:  ### Just skipped the value error, where all zero rows and columns in binmeth_fiter
         type_counts = [0,0,0,0,0,0,0,0]
         type_freqs = [0,0,0,0,0,0,0,0]
         return type_counts,type_freqs

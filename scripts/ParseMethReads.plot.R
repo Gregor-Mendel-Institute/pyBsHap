@@ -291,7 +291,7 @@ names(bs.bams)[i]
 input_file <- bs.bams[[i]]
 
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
-updown <- 0
+updown <- 3000
 check_pos <- paste(as.character(seqnames(check.gr)), start(check.gr)-updown, end(check.gr)+updown, sep = ",")
 
 pybshap.command <- paste("bshap getmeth -i", input_file, "-r", ref_seq, "-v -o", output_id, "-s",  check_pos)
