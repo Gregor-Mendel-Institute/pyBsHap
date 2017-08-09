@@ -19,24 +19,30 @@ setwd(output_fol)
 init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
 
 getReqMat <- function(test.mut, case = 1){
+  total.reads.genes <- rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])
+  min.read.thres <- 0
   if (case == 1){
     ### Taking the fraction of each cluster with total reads mapped to the gene
-    req.mat <- test.mut[,c(4,5,6,7,8,9,10,11)]/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])  ## Gene fractions filtering non methylated
+    req.mat <- test.mut[,c(4,5,6,7,8,9,10,11)]/total.reads.genes  ## Gene fractions filtering non methylated
+    req.mat <- req.mat[which(total.reads.genes > min.read.thres),]
     req.mat <- na.omit(req.mat)
     req.mat.description <- "Fraction of reads\nin each cluster"
   } else if (case == 2) {
     #### Just taking the number of reads as logarthimic number
     req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]))  ## Gene fractions filtering non methylated
+    req.mat <- req.mat[which(total.reads.genes > min.read.thres),]
     req.mat[req.mat == -Inf] = 0
     req.mat.description <- "Log10 \nnumber of reads"
   } else if (case == 3){
     ## Taking fracion now with the total reads and logarithmic
-    req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])))  ## Gene fractions filtering non methylated
+    req.mat <- log10(na.omit(test.mut[,c(4,5,6,7,8,9,10,11)]/total.reads.genes))  ## Gene fractions filtering non methylated
+    req.mat <- req.mat[which(total.reads.genes > min.read.thres),]
     req.mat[req.mat == -Inf] = 0
     req.mat.description <- "Log10 \n fraction of reads in each cluster"
   } else if (case == 4) {
     ## Conditional probability on the number of reads matching
-    req.mat <- na.omit((sum(rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))*test.mut[,c(5,6,7,8,9,10,11)])/rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))
+    req.mat <- na.omit((sum(rowSums(test.mut[,c(4,5,6,7,8,9,10,11)]))*test.mut[,c(5,6,7,8,9,10,11)])/total.reads.genes)
+    req.mat <- req.mat[which(total.reads.genes > min.read.thres),]
     req.mat.description <- "Conditional probability on the number of reads matching"
   }
   return(list(req.mat, req.mat.description))
@@ -82,10 +88,9 @@ names(methreads.file)[i]
 test.mut <- read.csv(file = file.path(methreads.dir, as.character(methreads.file)[i]), header = F)
 colnames(test.mut) <- get("init_cls", envir = .GlobalEnv)
 
-
+##### Checking the number of reads mapped in the genes 
 req.mat.list <- getReqMat(test.mut, case = 1)
 req.mat <- req.mat.list[[1]][1:top,]
-
 hist(req.mat.list[[1]][,8][which(req.mat.list[[1]][,8] > 0.003)], breaks = 500)
 
 which(req.mat.list[[1]][,8] > 0.003)
@@ -93,10 +98,9 @@ which(req.mat.list[[1]][,8] > 0.003)
 total.reads.genes <- rowSums(test.mut[,c(4,5,6,7,8,9,10,11)])
 total.reads.genes <- total.reads.genes[which(total.reads.genes > 0)]
 
-
 plot(total.reads.genes, req.mat.list[[1]][,8], pch = 19)
-
-
+hist(total.reads.genes, breaks = 100, col = "grey90", main = "Histogram of number of reads mapping each genes", xlab = "number of reads")
+#####
 
 cluster_wt <- hclust(dist(req.mat, method = "binary"))
 

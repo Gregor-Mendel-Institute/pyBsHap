@@ -106,7 +106,7 @@ def getMatchedSeq(binread, tair10, bin_bed):
             refseq = refseq + '-'
     return refseq, rseq
 
-def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
+def getSeqRecord(binread, tair10, bin_bed, intersect_bed, defreturn = 0):
     ## bin_bed = ['Chr1', start, end, binLen, pointPos]
     ## intersect_bed = [s, e]
     char_add = 'N'
@@ -114,7 +114,10 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed):
     refseq, rseq = getMatchedSeq(binread, tair10, bin_bed)
     dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
     fin_rseq = char_add * (intersect_bed[0] - bin_bed[1]) + dot_rseq + char_add * (bin_bed[2] - intersect_bed[1])
-    return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
+    if defreturn == 0:
+        return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
+    else:
+        return fin_rseq
 
 def getMethRead(tair10, binread):
     strand = decodeFlag(binread.flag)[4]
@@ -208,7 +211,6 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
         binmeth_whole = getMethWind(inBam, tair10, required_bed, meths)
-        import ipdb; ipdb.set_trace()
         if len(required_region) == 3:
             #AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
             (type_counts,type_freqs) = clusteringReads(binmeth_whole)
