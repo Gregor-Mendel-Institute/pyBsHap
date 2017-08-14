@@ -10,6 +10,8 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
+import subprocess
+import shlex
 
 import prebshap
 
@@ -50,7 +52,33 @@ def modifyMDtag(inBam, tair10, binread, outBam):
     oread.tags = tags
     outBam.write(oread)
 
-def writeBam(inBam, outBam):
-        # Out Bam file
-#        outBam = pysam.AlignmentFile('meths.temp.bam', "wb", header = inBam.header)
-#bamEdit.modifyMDtag(inBam, tair10, binread, outBam) ### Modifying bam file
+def writeBam(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
+    # Out Bam file
+    log.info("loading the input files!")
+    inBam = pysam.AlignmentFile(bamFile, "rb")
+    (chrs, chrslen, binLen) = prebshap.getChrs(inBam)
+    tair10 = Fasta(fastaFile)
+    log.info("finished!")
+    outBam_file = outFile + '_processed_reads_no_clonal_modifiedMD_filtered.bam'
+    log.info("writing file into AlignmentFile, %s!" % outBam_file)
+    outBam = pysam.AlignmentFile(outBam_file, "wb", header = inBam.header)
+    if interesting_region == '0,0,0':
+        for cid, clen in zip(chrs, chrslen):     ## chromosome wise
+            log.info("analysing chromosome: %s" % cid)
+            for binread in inBam.fetch(str(cid), 0, clen):
+                if prebshap.filterRead(binread):
+                    continue
+                modifyMDtag(inBam, tair10, binread, outBam)
+            log.info("finished!")
+    else:
+        required_region = interesting_region.split(',')
+        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
+        log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
+        for binread in inBam.fetch(required_bed[0], required_bed[1], required_bed[2]):
+            if prebshap.filterRead(binread):
+                continue
+            modifyMDtag(inBam, tair10, binread, outBam)
+        log.info("finished!")
+    log.info("indexing output bam file!")
+    subprocess.check_call(shlex.split("samtools index " + outBam_file))
+    log.info("finished!")

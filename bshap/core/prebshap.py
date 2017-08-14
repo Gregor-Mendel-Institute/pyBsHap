@@ -143,6 +143,15 @@ def getMethRead(tair10, binread):
     return permeths
     # We need to differentiate between the reads which are small and has no methylation
 
+def filterRead(binread):
+    rflag = decodeFlag(binread.flag)
+    filter_flag = False
+    if len(binread.get_aligned_pairs()) == 0 or rflag[10] != '0' or rflag[8] != '0':
+        ## removing the duplicates
+        ## Filter the read if alignment is not good!
+        filter_flag = True
+    return filter_flag
+
 def getMethWind(inBam, tair10, required_bed, meths = ''):
     # required_bed = ['Chr1', start, end, binLen]
     binLen = required_bed[3]
@@ -166,8 +175,8 @@ def getMethWind(inBam, tair10, required_bed, meths = ''):
         for binread in inBam.fetch(required_bed[0], bins, bins + binLen):
             rflag = decodeFlag(binread.flag)
             bin_bed = [required_bed[0], bins, bins + binLen]
-            if len(binread.get_aligned_pairs()) == 0 or rflag[10] != '0' or rflag[8] != '0': ## removing the duplicates
-                continue        ## Skip the read if the alignment is not good ;)
+            if filterRead(binread):
+                continue
             intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
             intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
             rseq_record = getSeqRecord(binread, tair10, bin_bed, intersect_bed) ## No need to check for the overlap to print the alignment
