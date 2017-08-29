@@ -192,6 +192,7 @@ def getMethWind(inBam, tair10, required_bed, meths = ''):
             meths.create_dataset("b_" + required_bed[0] + "_" + str(bins + 1),compression="gzip", data = np.array(binmeth).T)
         #reqmeths[progress_bins-1] = np.array(binmeth).T
         #window_alignment.append(MultipleSeqAlignment(bins_alignment))
+    import ipdb; ipdb.set_trace()
     return binmeth_whole
 
 def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):

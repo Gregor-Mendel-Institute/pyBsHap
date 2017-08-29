@@ -10,7 +10,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
-import subprocess
+from subprocess import Popen, PIPE
 import shlex
 
 import prebshap
@@ -80,5 +80,5 @@ def writeBam(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
             modifyMDtag(inBam, tair10, binread, outBam)
         log.info("finished!")
     log.info("indexing output bam file!")
-    subprocess.check_call(shlex.split("samtools index " + outBam_file))
+    Popen(shlex.split("samtools index " + outBam_file), stdout=PIPE)
     log.info("finished!")
