@@ -32,7 +32,8 @@ setup(
         "pyfaidx",
         "methylpy",
         "cutadapt",
-        "biopython"
+        "biopython",
+        "scikit-allel"
     ],
     entry_points={
         'console_scripts': [

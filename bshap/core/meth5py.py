@@ -1,10 +1,12 @@
 # Main module for bisulfite analysis
 # Summary statistics
-
+import logging
 import h5py as h5
 import numpy as np
 
-#def load_allc_methylation_files(allc_path,bin_bed=''):
+log = logging.getLogger(__name__)
+
+#def generage_h5file_from_allc(allc_id, allc_path):
 
 def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
     return HDF5MethTable(hdf5_file, bin_bed)
@@ -86,7 +88,7 @@ def MethylationSummaryStats(meths, category):
         meths.get_mc_total()
         meths.get_mc_count()
     if category == 1:   # weighted mean
-        return np.divide(np.sum(meths.mc_count), np.sum(meths.mc_total))
+        return np.divide(float(np.sum(meths.mc_count)), np.sum(meths.mc_total))
     elif category == 2: # get only methylated positions
         try:
             meths_len = np.sum(meths.__dict__['methylated'])
@@ -94,9 +96,30 @@ def MethylationSummaryStats(meths, category):
             meths.get_methylated()
             meths_len = np.sum(meths.__dict__['methylated'])
         return float(meths_len)/bin_len
-    elif category = 3: ## absolute means
+    elif category == 3: ## absolute means
         return(np.mean(np.divide(meths.mc_count, meths.mc_total)))
 
-def get_Methlation_GenomicRegion(hdf5_file, bin_bed, category = 1):
-    meths = load_hdf5_methylation_file(hdf5_file, bin_bed)
-    return(MethylationSummaryStats(meths, category))
+def get_Methlation_GenomicRegion(args):
+    # bin_bed = Chr1,1,100
+    binLen = int(args['window_size'])
+    required_region = args['required_region'].split(',')
+    required_bed = [required_region[0], int(required_region[1]), int(required_region[2])]
+    log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
+    bin_start = required_bed[1] - (required_bed[1] % binLen)
+    estimated_bins = range(bin_start, required_bed[2], binLen)
+    log.info("reading hdf5 file!")
+    meths = load_hdf5_methylation_file(args['inFile'])
+    log.info("writing methylation summary stats per window!")
+    outmeths_avg = open('meths.' + args['outFile'] + '.summary.txt', 'w')
+    for bins in estimated_bins:
+        bin_bed = [required_region[0], bins, bins + binLen]
+        meths.filter_pos_ix = meths.get_filter_inds(bin_bed)
+        try:
+            del meths.mc_count
+            del meths.mc_total
+            del meths.methylated
+        except AttributeError:
+            pass
+        req_meth_avg = MethylationSummaryStats(meths, args['category'])
+        outmeths_avg.write("%s,%s,%s,%s\n" % (bin_bed[0], bin_bed[1], bin_bed[2], req_meth_avg))
+    return(0)
