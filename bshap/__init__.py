@@ -12,6 +12,7 @@ import sys
 from bshap.core import prebshap
 from bshap.core import bsseq
 from bshap.core import bamEdit
+from bshap.core import meth5py
 import logging, logging.config
 
 __version__ = '0.0.1'
@@ -39,13 +40,23 @@ def get_options(program_license,program_version_message):
   inOptions = argparse.ArgumentParser(description=program_license)
   inOptions.add_argument('-V', '--version', action='version', version=program_version_message)
   subparsers = inOptions.add_subparsers(title='subcommands',description='Choose a command to run',help='Following commands are supported')
-  methbam = subparsers.add_parser('getmeth', help="pyBsHap on the bam files")
+
+  methbam = subparsers.add_parser('getmeth', help="Get methylation on each read from the aligned bam files")
   methbam.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   methbam.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
   methbam.add_argument("-s", "--specificRegion", dest="reqRegion", help="region to be checked, Ex. Chr1,1,100 --- an aln file is generated given this", default = '0,0,0')
   methbam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
   methbam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   methbam.set_defaults(func=bshap_methbam)
+
+  permeth_parser = subparsers.add_parser('methylation_percentage', help="Get methylation percentage on the given bin position.")
+  permeth_parser.add_argument("-i", "--input_h5file", dest="inFile", help="Input methylation HDF5 file generated from allc files")
+  permeth_parser.add_argument("-a", "--allc_path", dest="allc_path", help="If given allc files, path to the files is given here and the sample ID in the -i option.")
+  permeth_parser.add_argument("-b", "--bin_bed", dest="bin_bed", help="Bed region to calculate the methylation averages. ex. Chr1,1,100")
+  permeth_parser.add_argument("-o", "--output", dest="outFile", help="output file.")
+  permeth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+  permeth_parser.set_defaults(func=bsseq_meth_average)
+
   modifybam = subparsers.add_parser('modifymdtag', help="Modify MD tag on BAM files to get default coloring in jbrowse")
   modifybam.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   modifybam.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
@@ -53,6 +64,7 @@ def get_options(program_license,program_version_message):
   modifybam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
   modifybam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   modifybam.set_defaults(func=bshap_modifybam)
+
   callmc_parser = subparsers.add_parser('callmc', help="Call mc using methylpy from fastq file")
   callmc_parser.add_argument("-i", "--input_file", dest="inFile", help="Input fastq file for methylpy")
   callmc_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
@@ -63,6 +75,7 @@ def get_options(program_license,program_version_message):
   callmc_parser.add_argument("-m", "--mem", dest="memory", help="memory for sorting", default="2G")
   callmc_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   callmc_parser.set_defaults(func=callmcs_onesample)
+
   dmr_parser = subparsers.add_parser('dmrfind', help="Identify DMR using methylpy")
   dmr_parser.add_argument("-s", "--sample_ids", dest="sample_ids", help="sample ids, comma seperated")
   dmr_parser.add_argument("-r", "--sample_categories", dest="sample_cat", help="sample categories indicating replicates, comma separated", default="0")
@@ -72,6 +85,7 @@ def get_options(program_license,program_version_message):
   dmr_parser.add_argument("-o", "--outDMR", dest="outDMR", help="output file for DMR")
   dmr_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   dmr_parser.set_defaults(func=dmrfind)
+
   lowfreq_parser = subparsers.add_parser('callLowFreq', help="Get lowfreq positions from allc files")
   lowfreq_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
   lowfreq_parser.add_argument("-p", "--path", dest="path_to_allc", help="path to allc files")
@@ -80,6 +94,7 @@ def get_options(program_license,program_version_message):
   lowfreq_parser.add_argument("-o", "--outFile", dest="outFile", help="output h5py file")
   lowfreq_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   lowfreq_parser.set_defaults(func=lowfindfind)
+
   return inOptions
 
 def checkARGs(args):
@@ -126,6 +141,9 @@ def dmrfind(args):
 
 def lowfindfind(args):
     bsseq.getLowFreqSites(args)
+
+def bsseq_meth_average(args):
+
 
 def main():
   ''' Command line options '''

@@ -8,7 +8,7 @@ import logging
 import sys
 import os, os.path
 import scipy.stats as st
-import vcfnp
+import allel
 import subprocess
 from methylpy.call_mc import *
 from methylpy.DMRfind import DMRfind
@@ -24,9 +24,11 @@ def die(msg):
   sys.exit(1)
 
 def readVcf(inFile):
-  bvcf = vcfnp.variants(inFile, cache=True).view(np.recarray)
-  bvcfD = vcfnp.calldata_2d(inFile, cache=True).view(np.recarray)
-  return(bvcf, bvcfD)
+    bvcf = allel.read_vcf(inFile, samples = [0], fields = '*')
+    ## Changed this from vcfnp to allel, check the rest of scripts
+    #bvcf = vcfnp.variants(inFile, cache=True).view(np.recarray)
+    #bvcfD = vcfnp.calldata_2d(inFile, cache=True).view(np.recarray)
+    return(bvcf)
 
 def BinomTest(per_n, n, p, alternative="greater"):
     if per_n < 1 and per_n > 0:
@@ -194,18 +196,6 @@ def outH5File(allcBed, chrpositions, outFile):
         except TypeError:
             h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]).tolist(), shape=(allcBed.shape[0],))
     h5file.close()
-
-# Try to make it as a class, learned from PyGWAS
-class HDF5MethTable(object):
-
-    def __init__(self,hdf5_file):
-        self.h5file = h5py.File(hdf5_file, 'r')
-    def chr(self):
-        self.chr = self.h5file['chr'][:]
-    def pos(self):
-        self.pos = self['pos'][:]
-    def strand(self):
-        self.strand = self['strand'][:]
 
 def getLowFreqSites(args):
     seq_error = 0.0001
