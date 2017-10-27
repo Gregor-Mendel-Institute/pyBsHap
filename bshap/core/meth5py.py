@@ -134,21 +134,16 @@ class HDF5MethTable(object):
         else:
             return(self.h5file['total'])
 
-def MethylationSummaryStats(meths, category):
+
+def MethylationSummaryStats(meths, filter_pos_ix, category):
     # meths is already filtered for bin_bed positions
-    try:
-        bin_len = len(meths.__dict__['mc_total'])
-    except KeyError:
-        meths.get_mc_total()
-        meths.get_mc_count()
+    mc_total = meths.get_mc_total(filter_pos_ix)
+    mc_count = meths.get_mc_count(filter_pos_ix)
     if category == 1:   # weighted mean
-        return np.divide(float(np.sum(meths.mc_count)), np.sum(meths.mc_total))
+        return np.divide(float(np.sum(mc_count)), np.sum(mc_total))
     elif category == 2: # get only methylated positions
-        try:
-            meths_len = np.sum(meths.__dict__['methylated'])
-        except KeyError:
-            meths.get_methylated()
-            meths_len = np.sum(meths.__dict__['methylated'])
+        methylated = meths.get_methylated(filter_pos_ix)
+        meths_len = np.sum(methylated)
         return float(meths_len)/bin_len
     elif category == 3: ## absolute means
         return(np.mean(np.divide(meths.mc_count, meths.mc_total)))
@@ -156,18 +151,21 @@ def MethylationSummaryStats(meths, category):
 def get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg, category = 1):
     bin_start = required_bed[1] - (required_bed[1] % binLen)
     estimated_bins = range(bin_start, required_bed[2], binLen)
-    log.info("writing methylation summary stats per window!")
+    log.info("writing methylation summary stats for %s windows!" % len(estimated_bins))
+    bin_count = 0
     for bins in estimated_bins:
+        bin_count = bin_count + 1
         bin_bed = [required_bed[0], bins, bins + binLen]
-        meths.filter_pos_ix = meths.get_filter_inds(bin_bed)
-        import ipdb; ipdb.set_trace()
-        req_meth_avg = MethylationSummaryStats(meths, category)
-        outmeths_avg.write("%s,%s,%s,%s\n" % (bin_bed[0], bin_bed[1], bin_bed[2], req_meth_avg))
+        filter_pos_ix = meths.get_filter_inds(bin_bed)
+        if len(filter_pos_ix) > 0:
+            req_meth_avg = MethylationSummaryStats(meths, filter_pos_ix, category)
+        outmeths_avg.write("%s\t%s\t%s\t%s\n" % (bin_bed[0], bin_bed[1] + 1, bin_bed[2], req_meth_avg))
+        if bin_count % 100 == 0:
+            log.info("progress: %s windows" % bin_count)
     return 0
 
 def get_Methlation_GenomicRegion(args):
     # bin_bed = Chr1,1,100
-    binLen = int(args['window_size'])
     if args['allc_path'] is None:
         log.info("reading hdf5 file!")
         meths = load_hdf5_methylation_file(args['inFile'])
@@ -183,6 +181,10 @@ def get_Methlation_GenomicRegion(args):
         log.info("done!")
     outmeths_avg = open('meths.' + args['outFile'] + '.summary.txt', 'w')
     if args['required_region'] == '0,0,0':
+        if args['window_size'] is None:
+            binLen = 500
+        else:
+            binLen = int(args['window_size'])
         for cid, clen in zip(chrs, chrslen):     ## chromosome wise
             log.info("analysing chromosome: %s" % cid)
             required_bed = [cid, 0, clen, binLen]   ### 0 is to not print reads
@@ -193,6 +195,12 @@ def get_Methlation_GenomicRegion(args):
         required_region = args['required_region'].split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2])]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg)
+        import ipdb; ipdb.set_trace()
+        if args['window_size'] is not None:
+            get_Methlation_required_bed(meths, required_bed, args['window_size'], outmeths_avg)
+        else:
+            binLen = int(required_region[2]) - int(required_region[1]) + 1 
+            get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg)
+    outmeths_avg.close()
     log.info('finished!')
     return(0)

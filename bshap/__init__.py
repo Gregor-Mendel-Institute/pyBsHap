@@ -53,7 +53,7 @@ def get_options(program_license,program_version_message):
   permeth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files")
   permeth_parser.add_argument("-a", "--allc_path", dest="allc_path", help="If given allc files, path to the files is given here and the sample ID in the -i option.")
   permeth_parser.add_argument("-b", "--required_region", dest="required_region", help="Bed region to calculate the methylation averages. ex. Chr1,1,100", default = '0,0,0')
-  permeth_parser.add_argument("-w", "--window_size", dest="window_size", help="window size to get the methylation averages", default = 100)
+  permeth_parser.add_argument("-w", "--window_size", dest="window_size", help="window size to get the methylation averages")
   permeth_parser.add_argument("-c", "--methylation_averaging_method", dest="category", help="different methylation average methods, 1 -- weighted average, 2 -- methylation calls, 3 -- average methylation per position", default = 1)
   permeth_parser.add_argument("-o", "--output", dest="outFile", help="output file.")
   permeth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
