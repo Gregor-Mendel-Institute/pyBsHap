@@ -1,3 +1,4 @@
-# pyBsHap
+#pyBsHap
 
-Haplotype checking for the bsseq sequences
+analysing bisulfite sequencing data
+
