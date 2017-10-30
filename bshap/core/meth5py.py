@@ -5,6 +5,8 @@ import h5py as h5
 import numpy as np
 import pandas as pd
 import os.path
+from . import run_bedtools
+
 
 log = logging.getLogger(__name__)
 chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
@@ -166,6 +168,16 @@ def get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg, categ
 
 def get_Methlation_GenomicRegion(args):
     # bin_bed = Chr1,1,100
+    outFile =  'meths.' + args['outFile'] + '.summary.txt'
+    if args['required_region'] == '0,0,0':
+        outFile =  'meths.' + args['outFile'] + '.bedGraph'
+        if args['window_size'] is None:
+            binLen = 200
+        else:
+            binLen = int(args['window_size'])
+        run_bedtools.get_genomewide_methylation_WeightedMean(args['bedtoolsPath'], args['inFile'], outFile, window_size=binLen)
+        log.info("finished!")
+        return 0
     if args['allc_path'] is None:
         log.info("reading hdf5 file!")
         meths = load_hdf5_methylation_file(args['inFile'])
@@ -179,28 +191,16 @@ def get_Methlation_GenomicRegion(args):
             generage_h5file_from_allc(args['inFile'], args['allc_path'], outhdf5)
         meths = load_hdf5_methylation_file(outhdf5)
         log.info("done!")
-    outmeths_avg = open('meths.' + args['outFile'] + '.summary.txt', 'w')
-    if args['required_region'] == '0,0,0':
-        if args['window_size'] is None:
-            binLen = 500
-        else:
-            binLen = int(args['window_size'])
-        for cid, clen in zip(chrs, chrslen):     ## chromosome wise
-            log.info("analysing chromosome: %s" % cid)
-            required_bed = [cid, 0, clen, binLen]   ### 0 is to not print reads
-            get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg)
-            log.info("finished!")
-            return 0
+    outmeths_avg = open(outFile, 'w')
+    required_region = args['required_region'].split(',')
+    required_bed = [required_region[0], int(required_region[1]), int(required_region[2])]
+    log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
+    import ipdb; ipdb.set_trace()
+    if args['window_size'] is not None:
+        get_Methlation_required_bed(meths, required_bed, args['window_size'], outmeths_avg)
     else:
-        required_region = args['required_region'].split(',')
-        required_bed = [required_region[0], int(required_region[1]), int(required_region[2])]
-        log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        import ipdb; ipdb.set_trace()
-        if args['window_size'] is not None:
-            get_Methlation_required_bed(meths, required_bed, args['window_size'], outmeths_avg)
-        else:
-            binLen = int(required_region[2]) - int(required_region[1]) + 1 
-            get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg)
+        binLen = int(required_region[2]) - int(required_region[1]) + 1
+        get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg)
     outmeths_avg.close()
     log.info('finished!')
     return(0)

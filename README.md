@@ -1,4 +1,4 @@
-#pyBsHap
+# pyBsHap
 
 analysing bisulfite sequencing data
 
