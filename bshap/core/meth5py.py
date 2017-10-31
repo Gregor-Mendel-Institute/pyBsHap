@@ -172,10 +172,10 @@ def get_Methlation_GenomicRegion(args):
     if args['required_region'] == '0,0,0':
         outFile =  'meths.' + args['outFile'] + '.bedGraph'
         if args['window_size'] is None:
-            binLen = 200
+            window_size = 200
         else:
-            binLen = int(args['window_size'])
-        run_bedtools.get_genomewide_methylation_WeightedMean(args['bedtoolsPath'], args['inFile'], outFile, window_size=binLen)
+            window_size = int(args['window_size'])
+        run_bedtools.get_genomewide_methylation_WeightedMean(args['bedtoolsPath'], args['inFile'], outFile, window_size=window_size, overlap=args['overlap'])
         log.info("finished!")
         return 0
     if args['allc_path'] is None:

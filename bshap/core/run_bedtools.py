@@ -22,7 +22,7 @@ def windows(seqlength, window_size, overlap):
         for x in range(1, seqlength, window_size):
             yield [x, x + window_size - 1]
 
-def generate_window_file(window_size, out_windows, overlap = 50):
+def generate_window_file(window_size, out_windows, overlap):
     if os.path.isfile(out_windows):
         log.info("utilizing window file: %s" % out_windows)
         return 0
@@ -36,7 +36,7 @@ def generate_window_file(window_size, out_windows, overlap = 50):
     log.info("done!")
     return 0
 
-def get_genomewide_methylation_WeightedMean(bedtoolPath, bedFile, outFile, window_size=100):
+def get_genomewide_methylation_WeightedMean(bedtoolPath, bedFile, outFile, window_size, overlap):
     outBedGraph = open(outFile, "w")
     window_file = "temp." + str(window_size) + "bp.windows.txt"
     generate_window_file(window_size, window_file)
