@@ -17,10 +17,10 @@ def windows(seqlength, window_size, overlap):
         raise NotImplementedError
     if overlap > 0:
         for x in range(1, seqlength, overlap):
-            yield [x, x + window_size - 1]
+            yield([x, x + window_size - 1])
     else:
         for x in range(1, seqlength, window_size):
-            yield [x, x + window_size - 1]
+            yield([x, x + window_size - 1])
 
 def generate_window_file(window_size, out_windows, overlap):
     if os.path.isfile(out_windows):
@@ -38,8 +38,8 @@ def generate_window_file(window_size, out_windows, overlap):
 
 def get_genomewide_methylation_WeightedMean(bedtoolPath, bedFile, outFile, window_size, overlap):
     outBedGraph = open(outFile, "w")
-    window_file = "temp." + str(window_size) + "bp.windows.txt"
-    generate_window_file(window_size, window_file)
+    window_file = "tair10." + str(window_size) + "bp_windowsize." + str(overlap) + "bp_overlap.windows.txt"
+    generate_window_file(window_size, window_file, overlap)
     bedtools_command = 'bedtools map -a ' + window_file + ' -b ' + bedFile + ' -o sum,sum -c 7,8'
     if bedtoolPath is not None:
         bedtools_command = bedtoolPath + '/' + bedtools_command
