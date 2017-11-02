@@ -5,28 +5,60 @@ import h5py as h5
 import numpy as np
 import pandas as pd
 import os.path
+import glob
+import sys
 from . import run_bedtools
+import csv
 
 
 log = logging.getLogger(__name__)
 chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
 chrslen = [34964571, 22037565, 25499034, 20862711, 31270811]
 
+def die(msg):
+  sys.stderr.write('Error: ' + msg + '\n')
+  sys.exit(1)
+
+def get_chrs(allc_id, allc_path):
+    #files_present = glob.glob(allc_path + "/allc_" + allc_id + "*tsv")
+    if os.path.isfile(allc_path + "/allc_" + allc_id + "_Chr1.tsv"):
+        return(['Chr1','Chr2','Chr3','Chr4','Chr5'])
+    elif os.path.isfile(allc_path + "/allc_" + allc_id + "_1.tsv"):
+        return(['1','2','3','4','5'])
+    else:
+        die("Either the allc id, %s or allc file path, %s is wrong" % (allc_id, allc_path))
+
+def read_allc_pandas_table(allc_file):
+    sniffer = csv.Sniffer()
+    allc = open(allc_file, 'rb')
+    ifheader = sniffer.has_header(allc.read(4096))
+    if ifheader:
+        bsbed = pd.read_table(allc_file, header = 0)
+        return(bsbed)
+    else:
+        bsbed = pd.read_table(allc_file, header = None)
+    if len(bsbed.columns.values) == 7:
+        bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
+    else:
+        raise NotImplementedError
+    return(bsbed)
+
 def generage_h5file_from_allc(allc_id, allc_path, outFile):
     allcBed = []
     chrpositions = []
     tlen = 0
-    for c in chrs:
-        allc = allc_path + "/allc_" + allc_id + "_" + c + ".tsv"
-        log.info("progress: reading %s!" % allc)
-        bsbed = pd.read_table(allc)
+    sample_chrs = get_chrs(allc_id, allc_path)
+    for c in sample_chrs:
+        allc_file = allc_path + "/allc_" + allc_id + "_" + c + ".tsv"
+        log.info("progress: reading %s!" % allc_file)
+        bsbed = read_allc_pandas_table(allc_file)
         tlen = tlen + bsbed.shape[0]
         chrpositions.append(tlen)
         try:
             allcBed = pd.concat([allcBed, bsbed])
         except TypeError:
             allcBed = bsbed
-    log.info("writing a h5 file")
+    log.info("writing a hdf5 file")
     generate_H5File(allcBed,chrpositions, outFile)
 
 def generate_H5File(allcBed, chrpositions, outFile):
@@ -168,9 +200,8 @@ def get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg, categ
 
 def get_Methlation_GenomicRegion(args):
     # bin_bed = Chr1,1,100
-    outFile =  'meths.' + args['outFile'] + '.summary.txt'
     if args['required_region'] == '0,0,0':
-        outFile =  'meths.' + args['outFile'] + '.bedGraph'
+        outFile =  args['outFile'] + '.bedGraph'
         if args['window_size'] is None:
             window_size = 200
         else:
@@ -191,11 +222,10 @@ def get_Methlation_GenomicRegion(args):
             generage_h5file_from_allc(args['inFile'], args['allc_path'], outhdf5)
         meths = load_hdf5_methylation_file(outhdf5)
         log.info("done!")
-    outmeths_avg = open(outFile, 'w')
+    outmeths_avg = open(args['outFile'], 'w')
     required_region = args['required_region'].split(',')
     required_bed = [required_region[0], int(required_region[1]), int(required_region[2])]
     log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-    import ipdb; ipdb.set_trace()
     if args['window_size'] is not None:
         get_Methlation_required_bed(meths, required_bed, args['window_size'], outmeths_avg)
     else:
