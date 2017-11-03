@@ -34,13 +34,13 @@ def getChrs(inBam):
         if len(binLen) >= 100:
             break
     #return (reqchrs, reqchrslen, int(np.nanmean(binLen)))
-    return (chrs, chrslen, int(np.nanmean(binLen)))
+    return(chrs, chrslen, int(np.nanmean(binLen)))
 
 def get_reverse_complement(seq):
     old_chars = "ACGT"
     replace_chars = "TGCA"
     tab = string.maketrans(old_chars,replace_chars)
-    return seq.translate(tab)[::-1]
+    return(seq.translate(tab)[::-1])
 
 def findIntersectbed(bin_bed, map_bed):
     # bin_bed = [290605, 290688]
@@ -49,7 +49,7 @@ def findIntersectbed(bin_bed, map_bed):
     map_bed_arr = np.array(range(map_bed[0], map_bed[1]))
     intersect_bed_arr = np.sort(np.intersect1d(bin_bed_arr, map_bed_arr))
     intersect_bed = [intersect_bed_arr[0], intersect_bed_arr[-1]+1]
-    return intersect_bed
+    return(intersect_bed)
 
 def parseContext(tair10, cid, pos, strand):
     try:
@@ -59,26 +59,26 @@ def parseContext(tair10, cid, pos, strand):
             dnastring = tair10[cid][pos-2:pos+1].seq.encode('ascii').upper()  ## Changed the position, different from forward
             dnastring = get_reverse_complement(dnastring)
     except:
-        return ("CNN", "CN")
+        return("CNN", "CN")
     if dnastring[1].upper() == 'G':
         dna_context = ["CG",0]
     elif dnastring[2].upper() == 'G':
         dna_context = ["CHG",1]
     elif dnastring:
         dna_context = ["CHH",2]
-    return (dnastring, dna_context)
+    return(dnastring, dna_context)
 
 def decodeFlag(flag):
     bintag = str(int(bin(flag)[2:]))[::-1]
     notag = (12 - len(bintag)) * '0'
-    return bintag + notag
+    return(bintag + notag)
 
 def getStrandContext(strand):
     if strand == '0': ## Forward read, count the number of C's
         re_string = ['C','T','.']
     elif strand == '1': ## reverse
         re_string = ['G', 'A',',']
-    return re_string
+    return(re_string)
 
 def getHighlightedSeqs(refseq, rseq, strand):
     re_string = getStrandContext(strand)
@@ -86,7 +86,7 @@ def getHighlightedSeqs(refseq, rseq, strand):
     for i,c in enumerate(refseq):
         if c.upper() != re_string[0]:
             dot_rseq = dot_rseq[:i] + re_string[2] + dot_rseq[i+1:]
-    return dot_rseq
+    return(dot_rseq)
 
 def getMatchedSeq(binread, tair10, bin_bed):
     intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
@@ -104,7 +104,7 @@ def getMatchedSeq(binread, tair10, bin_bed):
         elif rind is None and i is not None:
             rseq = rseq + binread.seq[i]
             refseq = refseq + '-'
-    return refseq, rseq
+    return(refseq, rseq)
 
 def getSeqRecord(binread, tair10, bin_bed, intersect_bed, defreturn = 0):
     ## bin_bed = ['Chr1', start, end, binLen, pointPos]
@@ -115,9 +115,9 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed, defreturn = 0):
     dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
     fin_rseq = char_add * (intersect_bed[0] - bin_bed[1]) + dot_rseq + char_add * (bin_bed[2] - intersect_bed[1])
     if defreturn == 0:
-        return SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0])
+        return(SeqRecord(Seq(fin_rseq, generic_dna), id = binread.query_name.split(' ')[0]))
     else:
-        return fin_rseq
+        return(fin_rseq)
 
 def getMethRead(tair10, binread):
     strand = decodeFlag(binread.flag)[4]
@@ -140,7 +140,7 @@ def getMethRead(tair10, binread):
     #permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
     #permeths = [tmeth, tCs[0], tCs[1], tCs[2]]
     permeths = [tmeth, tCs[0], rmeth[0], tCs[1], rmeth[1], tCs[2], rmeth[2]]
-    return permeths
+    return(permeths)
     # We need to differentiate between the reads which are small and has no methylation
 
 def filterRead(binread):
@@ -150,7 +150,7 @@ def filterRead(binread):
         ## removing the duplicates
         ## Filter the read if alignment is not good!
         filter_flag = True
-    return filter_flag
+    return(filter_flag)
 
 def getMethWind(inBam, tair10, required_bed, meths = ''):
     # required_bed = ['Chr1', start, end, binLen]
@@ -192,7 +192,7 @@ def getMethWind(inBam, tair10, required_bed, meths = ''):
             meths.create_dataset("b_" + required_bed[0] + "_" + str(bins + 1),compression="gzip", data = np.array(binmeth).T)
         #reqmeths[progress_bins-1] = np.array(binmeth).T
         #window_alignment.append(MultipleSeqAlignment(bins_alignment))
-    return binmeth_whole
+    return(binmeth_whole)
 
 def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     ## input a bam file, bin length
@@ -214,7 +214,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
             getMethWind(inBam, tair10, required_bed, meths)
             log.info("finished!")
             meths.close()
-            return 0
+            return(0)
     else:
         required_region = interesting_region.split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
@@ -228,7 +228,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
                 out_stats.write(json.dumps(types_summary))
         meths.close()
         log.info("finished!")
-        return binmeth_whole
+        return 0
 
 def getMethsRegions(bamFile, fastaFile, outFile, regionsFile):
     ## Give a bed file for this
@@ -296,14 +296,14 @@ def countTypeFreqs(type_cls):
 
 def clusteringReads(binmeth_whole, n_clusters=8):
     init_cls = np.array(((0,0,0),(1,0,0),(0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1), (1,1,1)), dtype=float)
-    binmeth_fiter = np.array(binmeth_whole)
+    binmeth_fiter = np.array(binmeth_whole)[:,[2,4,6]]  ## filter for columns from thw binmeth_whole
     binmeth_fiter[binmeth_fiter == -1] = np.nan  #### Removing the reads which do not have some information
     try:    ### This is a very dangerous conditional statement to put
         binmeth_fiter = binmeth_fiter[~np.isnan(binmeth_fiter).any(axis=1)]
         kmeans = KMeans(n_clusters=8, init=init_cls,n_init = 1).fit(binmeth_fiter)
         type_cls = np.unique(kmeans.labels_, return_counts=True)
-        return countTypeFreqs(type_cls)
+        return(countTypeFreqs(type_cls))
     except ValueError:  ### Just skipped the value error, where all zero rows and columns in binmeth_fiter
         type_counts = [0,0,0,0,0,0,0,0]
         type_freqs = [0,0,0,0,0,0,0,0]
-        return type_counts,type_freqs
+        return(type_counts,type_freqs)
