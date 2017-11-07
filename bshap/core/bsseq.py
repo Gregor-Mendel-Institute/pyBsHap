@@ -10,7 +10,7 @@ import os, os.path
 import scipy.stats as st
 import allel
 import subprocess
-from methylpy.call_mc import *
+from methylpy.call_mc_se import *
 from methylpy.DMRfind import DMRfind
 import glob
 import h5py

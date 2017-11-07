@@ -11,9 +11,11 @@ resetPar <- function() {
 }
 araport.gff <- import("~/ARAPORT11/Araport11_GFF3_genic_regions.genes.TEs.201606.gff")
 araport.genes <- read.table("~/ARAPORT11/Araport11_GFF3_genes_201606.bed", as.is = T)
+araport.genes <- read.table("/vol/HOME/ARAPORT11/Araport11_GFF3_genes_201606.bed", as.is = T)
 
 
-output_fol <- "/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
+#output_fol <- "/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
+output_fol <- "/lustre/scratch/projects/cegs/rahul/016.bshap/001.col-0/001.methReads_aragenes/"
 setwd(output_fol)
 
 init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
@@ -77,7 +79,7 @@ names(methreads.file) <- c("WT (Col-0)", "met1 (Col-0)", "met1 cmt3 (Col-0)", "n
 
 top <- 1500
 req_cols <- c(1,2,8)
-i = 2 <- <- <- <- <- 
+i = 2 
 names(methreads.file)[i]
 test.mut <- read.csv(file = file.path(methreads.dir, as.character(methreads.file)[i]), header = F)
 colnames(test.mut) <- get("init_cls", envir = .GlobalEnv)
@@ -123,7 +125,8 @@ init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(
 
 mutant.data <- read.table("/projects/cegs/rahul/013.alignMutants_GSE39901/SraRunTable_StroudMutants.txt", sep = "\t", header = T, as.is = T)
 
-methreads.fol <- "/lustre/scratch/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/100.ARCHIVE.methReads_aragenes/"
+
+methreads.fol <- "/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
 methreads.files <- list.files(methreads.fol, pattern = "summary.txt")
 
 required.frac.ind <- 11
@@ -131,24 +134,79 @@ init_cls[required.frac.ind]
 
 required.frac.methreads <- c()
 for(mut in methreads.files){
-  t.mut <- read.csv(file = file.path(methreads.fol, mut), header = F)
   t.id <- mutant.data$genotype_s[which(mutant.data$Run_s == unlist(strsplit(mut, "[.]"))[2])]
   t.req.frac <- rep(NA, length(araport.genes.stend))
-  req.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")
+  try(t.mut <- read.csv(file = file.path(methreads.fol, mut), header = F), silent = T)
+  if(inherits(t.mut, 'try-error')) {next}
+  
+  req.sums <- rowSums(t.mut[,c(5,6,7,8,9,10,11)])
   ### taking the fraction of required column
-  #req.sums <- rowSums(t.mut[,c(5,6,7,8,9,10,11)])
-  #t.req.inds <- which(req.sums > 0)
-  #t.req.frac[match(req.ids[t.req.inds], araport.genes.stend)] = t.mut[t.req.inds,required.frac.ind] / req.sums[t.req.inds]
+  sample.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")[which(req.sums > 0)]
+  common.ids <- sample.ids[which(sample.ids %in% araport.genes.stend)]
+  t.req.inds <- which(sample.ids %in% common.ids)
+  t.req.frac[which(araport.genes.stend %in% common.ids)] = t.mut[t.req.inds,required.frac.ind] / req.sums[t.req.inds]
   ### Now plotting the absolute numbers
-  req.nums <- log10(t.mut[,required.frac.ind])
-  req.nums[req.nums == -Inf] = 0
-  t.req.frac[match(req.ids, araport.genes.stend)] = req.nums
+  #sample.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")
+  #common.ids <- sample.ids[which(sample.ids %in% araport.genes.stend)]
+  #req.nums <- log10(t.mut[,required.frac.ind])
+  #req.nums[req.nums == -Inf] = 0
+  #t.req.frac[which(araport.genes.stend %in% common.ids)] = req.nums
   ###
   required.frac.methreads <- cbind(required.frac.methreads, t.req.frac)
   colnames(required.frac.methreads)[length(colnames(required.frac.methreads))] <- t.id
 }
 
 Heatmap(na.omit(required.frac.methreads), cluster_rows=T,cluster_columns =T, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = paste("%", init_cls[required.frac.ind]), color_bar = "continuous"))
+
+####
+## Checking for the columbia accession in various runs
+###
+init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
+araport.genes.stend <- paste(araport.genes$V1,araport.genes$V2,araport.genes$V3, sep = ",")[1:2500]
+
+accs.data <- read.table("/projects/cegs/rahul/008.Col-0.Bis/sra_info.txt", sep = "\t", header = T, as.is = T)
+methreads.fol <- "/projects/cegs/rahul/016.bshap/001.col-0/001.methReads_aragenes/"
+methreads.files <- list.files(methreads.fol, pattern = "summary.txt")[2:5]
+
+required.frac.ind <- 11
+init_cls[required.frac.ind]
+
+fix(required.frac.methreads)
+
+required.frac.methreads <- c()
+for(mut in methreads.files){
+  t.req.frac <- rep(NA, length(araport.genes.stend))
+  t.id <- accs.data$Run_s[which(accs.data$Run_s == unlist(strsplit(mut, "[.]"))[2])]
+  try(t.mut <- read.csv(file = file.path(methreads.fol, mut), header = F), silent = T)
+  if(inherits(t.mut, 'try-error')) {next}
+  req.sums <- rowSums(t.mut[,c(5,6,7,8,9,10,11)])
+  ### taking the fraction of required column
+  sample.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")[which(req.sums > 0)]
+  common.ids <- sample.ids[which(sample.ids %in% araport.genes.stend)]
+  t.req.inds <- which(sample.ids %in% common.ids)
+  t.req.frac[which(araport.genes.stend %in% common.ids)] = t.mut[t.req.inds,required.frac.ind] / req.sums[t.req.inds]
+  ### Now plotting the absolute numbers
+  #sample.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")
+  #common.ids <- sample.ids[which(sample.ids %in% araport.genes.stend)]
+  #req.nums <- log10(t.mut[,required.frac.ind])
+  #req.nums[req.nums == -Inf] = 0
+  #t.req.frac[which(araport.genes.stend %in% common.ids)] = req.nums
+  ###
+  required.frac.methreads <- cbind(required.frac.methreads, t.req.frac)
+  colnames(required.frac.methreads)[length(colnames(required.frac.methreads))] <- t.id
+}
+
+
+head(required.frac.methreads)
+
+Heatmap(na.omit(required.frac.methreads), cluster_rows=T,cluster_columns =T, col=brewer.pal(11, "Spectral")[11:1], clustering_distance_rows = "binary", show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = paste("%", init_cls[required.frac.ind]), color_bar = "continuous"))
+
+
+
+
+
+
+
 
 
 
