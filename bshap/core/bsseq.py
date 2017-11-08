@@ -16,6 +16,7 @@ import glob
 import h5py
 import re
 import subprocess, shlex
+from . import meth5py
 
 log = logging.getLogger(__name__)
 
@@ -185,18 +186,6 @@ def parseMC_class(mc_class):
         context = ["CHH",2]
     return context
 
-def outH5File(allcBed, chrpositions, outFile):
-    h5file = h5py.File(outFile, 'w')
-    num_lines = len(chrpositions)
-    h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
-    ## Going through all the columns
-    for i in range(allcBed.shape[1]):
-        try:
-            h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]), shape=(allcBed.shape[0],))
-        except TypeError:
-            h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]).tolist(), shape=(allcBed.shape[0],))
-    h5file.close()
-
 def getLowFreqSites(args):
     seq_error = 0.0001
     #allcFiles = glob.glob(args['path_to_allc'] + "/allc_" + args['sample_id'] + "*.tsv")
@@ -204,10 +193,12 @@ def getLowFreqSites(args):
     umethfile = args['path_to_allc'] + "/allc_" + args['sample_id'] + "_" + args['unMeth'] + ".tsv"
     if os.path.isfile(umethfile):
         conv_rate = getconv_rate_allc(umethfile)
+        error_rate = 1 - conv_rate + seq_error
     else:
-        die("Provide a unMethylatedControl to get conversion efficiency")
-    error_rate = 1 - conv_rate + seq_error
-    chrs = getChrs_allc(umethfile)
+        log.info("Provide a unMethylatedControl to get conversion efficiency")
+        log.info("taking a default conversion rate of 99%")
+        error_rate = 0.01 + seq_error
+    chrs = meth5py.get_chrs(args['sample_id'], args['path_to_allc'])
     lowfreq_pval = np.zeros(0,dtype="int8")
     allcBed = []
     chrpositions = []
@@ -217,7 +208,7 @@ def getLowFreqSites(args):
             die("file %s not found!" % allc)
         chrpositions.append(len(lowfreq_pval))
         log.info("reading file %s" % allc)
-        bsbed = pd.read_table(allc)
+        bsbed = meth5py.read_allc_pandas_table(allc)
         log.info("analysing %s!" % c)
         meth_inds = np.where(bsbed['methylated'] == 1)[0]
         mcpval = callMPs(np.array(bsbed['mc_count'])[meth_inds], np.array(bsbed['total'])[meth_inds], 1 - error_rate, alternative="less")
@@ -231,5 +222,5 @@ def getLowFreqSites(args):
         log.info("done!")
     allcBed['lowfreq'] = pd.Series(lowfreq_pval, index=allcBed.index)
     log.info("writing the data into a h5 file")
-    outH5File(allcBed,chrpositions, args['outFile'])
+    meth5py.generate_H5File(allcBed, chrpositions, args['outFile'])
     log.info("finished!")
