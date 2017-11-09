@@ -173,6 +173,8 @@ def MethylationSummaryStats(meths, filter_pos_ix, category):
     # meths is already filtered for bin_bed positions
     mc_total = meths.get_mc_total(filter_pos_ix)
     mc_count = meths.get_mc_count(filter_pos_ix)
+    if np.sum(mc_count) == 0:
+        return None
     if category == 1:   # weighted mean
         return np.divide(float(np.sum(mc_count)), np.sum(mc_total))
     elif category == 2: # get only methylated positions
@@ -206,7 +208,7 @@ def get_Methlation_GenomicRegion(args):
             window_size = 200
         else:
             window_size = int(args['window_size'])
-        run_bedtools.get_genomewide_methylation_WeightedMean(args['bedtoolsPath'], args['inFile'], outFile, window_size=window_size, overlap=args['overlap'])
+        run_bedtools.get_genomewide_methylation_WeightedMean(args['bedtoolsPath'], args['inFile'], outFile, window_size=window_size, overlap=args['overlap'], category = args['category'])
         log.info("finished!")
         return 0
     if args['allc_path'] is None:

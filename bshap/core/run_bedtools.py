@@ -36,15 +36,41 @@ def generate_window_file(window_size, out_windows, overlap):
     log.info("done!")
     return 0
 
-def get_genomewide_methylation_WeightedMean(bedtoolPath, bedFile, outFile, window_size, overlap):
+def MethylationSummaryStats(window_file, bedFile, bedtoolPath, category):
+    ## In a bedfile you have these columns
+    # Chr1	22	23	CCC	0	+	1	1
+    # Chr1	23	24	CCT	0	+	1	1
+    # Chr1	24	25	CTA	0	+	1	1
+    # Chr1	29	30	CCT	0	+	0	1
+    # Chr1	30	31	CTC	0	+	1	1
+    # Chr1	32	33	CTG	0	+	1	1
+    # Chr1	34	35	CAG	1	-	9	18
+    bedtools_command = 'bedtools map -a ' + window_file + ' -b ' + bedFile
+    if bedtoolPath is not None:
+        bedtools_command = bedtoolPath + '/' + bedtools_command
+    skip_na_lines = ' | awk \'$4 != "." {print $0}\''
+    if category == 1:   # weighted mean
+        bedtools_command = bedtools_command + ' -o sum,sum -c 7,8'
+        awk_command = '| awk \'$5 > 0 {print $1 "\t" $2 "\t" $3 "\t" $4/$5}\''
+        return(bedtools_command + awk_command + skip_na_lines)
+    elif category == 2:
+        bedtools_command = bedtools_command + ' -o mean -c 5'
+        return(bedtools_command + skip_na_lines)
+    elif category == 3:
+        awk_command = 'awk \'$8 > 0 {print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $7/$8 "\t" $6}\' ' + bedFile
+        bedtools_command =  'bedtools map -a ' + window_file + ' -b stdin -o mean -c 5'
+        if bedtoolPath is not None:
+            bedtools_command = bedtoolPath + '/' + bedtools_command
+        return(awk_command + ' | ' + bedtools_command + skip_na_lines)
+    else:
+        raise NotImplementedError
+
+def get_genomewide_methylation_WeightedMean(bedtoolPath, bedFile, outFile, window_size, overlap, category):
     outBedGraph = open(outFile, "w")
     window_file = "tair10." + str(window_size) + "bp_windowsize." + str(overlap) + "bp_overlap.windows.txt"
     generate_window_file(window_size, window_file, overlap)
-    bedtools_command = 'bedtools map -a ' + window_file + ' -b ' + bedFile + ' -o sum,sum -c 7,8'
-    if bedtoolPath is not None:
-        bedtools_command = bedtoolPath + '/' + bedtools_command
-    awk_command = '| awk \'$5 > 0 {print $1 "\t" $2 "\t" $3 "\t" $4/$5}\''
-    full_command = bedtools_command + awk_command
+    full_command = MethylationSummaryStats(window_file, bedFile, bedtoolPath, category)
+    log.info("make sure the bedtools version is > v2.26.0")
     log.info('running bedtools!')
     convertcsv = Popen(full_command, shell=True, stdout = outBedGraph)
     convertcsv.wait()
