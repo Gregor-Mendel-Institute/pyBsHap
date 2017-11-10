@@ -9,7 +9,7 @@ import glob
 import sys
 from . import run_bedtools
 import csv
-
+import itertools
 
 log = logging.getLogger(__name__)
 chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
@@ -61,10 +61,10 @@ def generage_h5file_from_allc(allc_id, allc_path, outFile):
     log.info("writing a hdf5 file")
     generate_H5File(allcBed,chrpositions, outFile)
 
+chunk_size = 100000
 def generate_H5File(allcBed, chrpositions, outFile):
     h5file = h5.File(outFile, 'w')
     num_lines = len(chrpositions)
-    chunk_size = 10000
     h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
     h5file.create_dataset('pos', compression="gzip", data=np.array(allcBed['pos']), shape=(allcBed.shape[0],), dtype='i4')
     h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i4')
@@ -85,6 +85,16 @@ def generate_H5File(allcBed, chrpositions, outFile):
 
 def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
     return HDF5MethTable(hdf5_file, bin_bed)
+
+def iter_inds(t_inds):
+    result = []
+    for t in t_inds:
+        result.append(t)
+        if len(result) == chunk_size:
+            yield(result)
+            result = []
+    if result:
+        yield(result)
 
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
@@ -110,69 +120,85 @@ class HDF5MethTable(object):
         # bin_bed = ['Chr1', 0, 100]
         if bin_bed == '':
             return(None)
-        x_chrpositions = np.array(self.h5file['chrpositions'])
+        if len(bin_bed) < 3:
+            raise NotImplementedError
         x_pos = self.h5file['pos']
+        x_chrpositions = np.append(np.array(self.h5file['chrpositions']), len(x_pos))
         req_chr_ind = np.where(np.array(chrs) == bin_bed[0])[0][0]
-        if req_chr_ind == 0:
-            req_chr_pos_inds = [0,x_chrpositions[req_chr_ind]]
-        else:
-            req_chr_pos_inds = [x_chrpositions[req_chr_ind-1],x_chrpositions[req_chr_ind]]
-        req_inds = np.searchsorted(x_pos[req_chr_pos_inds[0]:req_chr_pos_inds[1]],[bin_bed[1],bin_bed[2]], side='right')
+        req_chr_pos_inds = [x_chrpositions[req_chr_ind],x_chrpositions[req_chr_ind + 1]]
+        req_inds = x_chrpositions[req_chr_ind] + np.searchsorted(x_pos[req_chr_pos_inds[0]:req_chr_pos_inds[1]],[bin_bed[1],bin_bed[2]], side='right')
         return(range(req_inds[0],req_inds[1]))
 
 
     def get_chrs(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['chr'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['chr'][next(inds)]))
         else:
-            return(self.h5file['chr'])
+            yield(self.h5file['chr'])
 
     def get_positions(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['pos'][filter_pos_ix]))
-        return(self.h5file['pos'])
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['pos'][next(inds)]))
+        else:
+            yield(self.h5file['pos'])
 
     def get_methylated(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['methylated'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['methylated'][next(inds)]))
         else:
-            return(self.h5file['methylated'])
+            yield(self.h5file['methylated'])
 
     def get_strand(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['strand'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['strand'][next(inds)]))
         else:
-            return(self.h5file['strand'])
+            yield(self.h5file['strand'])
 
     def get_mc_class(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['mc_class'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['mc_class'][next(inds)]))
         else:
-            return(self.h5file['mc_class'])
+            yield(self.h5file['mc_class'])
 
     def get_mc_count(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['mc_count'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['mc_count'][next(inds)]))
         else:
-            return(self.h5file['mc_count'])
+            yield(self.h5file['mc_count'])
 
     def get_lowfreq(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['lowfreq'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['lowfreq'][next(inds)]))
         else:
-            return(self.h5file['lowfreq'])
+            yield(self.h5file['lowfreq'])
 
     def get_mc_total(self, filter_pos_ix):
         if filter_pos_ix is not None:
-            return(np.array(self.h5file['total'][filter_pos_ix]))
+            inds = iter_inds(filter_pos_ix)
+            for i in range(0, len(filter_pos_ix), chunk_size):
+                yield(np.array(self.h5file['total'][next(inds)]))
         else:
-            return(self.h5file['total'])
+            yield(self.h5file['total'])
 
 
 def MethylationSummaryStats(meths, filter_pos_ix, category):
     # meths is already filtered for bin_bed positions
-    mc_total = meths.get_mc_total(filter_pos_ix)
-    mc_count = meths.get_mc_count(filter_pos_ix)
+    mc_total = meths.mc_total(filter_pos_ix)
+    mc_count = meths.mc_count(filter_pos_ix)
     if np.sum(mc_count) == 0:
         return None
     if category == 1:   # weighted mean
