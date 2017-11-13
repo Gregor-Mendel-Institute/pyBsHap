@@ -53,10 +53,10 @@ def MethylationSummaryStats(window_file, bedFile, bedtoolPath, category):
         bedtools_command = bedtools_command + ' -o sum,sum -c 7,8'
         awk_command = '| awk \'$5 > 0 {print $1 "\t" $2 "\t" $3 "\t" $4/$5}\''
         return(bedtools_command + awk_command + skip_na_lines)
-    elif category == 2:
+    elif category == 2:  # fraction of methylated positions
         bedtools_command = bedtools_command + ' -o mean -c 5'
         return(bedtools_command + skip_na_lines)
-    elif category == 3:
+    elif category == 3:  # absolute means
         awk_command = 'awk \'$8 > 0 {print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $7/$8 "\t" $6}\' ' + bedFile
         bedtools_command =  'bedtools map -a ' + window_file + ' -b stdin -o mean -c 5'
         if bedtoolPath is not None:
