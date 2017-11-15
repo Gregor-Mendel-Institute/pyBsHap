@@ -14,7 +14,7 @@ entire_chrslen = [34964571, 22037565, 25499034, 20862711, 31270811]
 
 def windows(seqlength, window_size, overlap):
     if overlap >= window_size:
-        raise NotImplementedError
+        raise(NotImplementedError)
     if overlap > 0:
         for x in range(1, seqlength, overlap):
             yield([x, x + window_size - 1])
@@ -25,7 +25,7 @@ def windows(seqlength, window_size, overlap):
 def generate_window_file(window_size, out_windows, overlap):
     if os.path.isfile(out_windows):
         log.info("utilizing window file: %s" % out_windows)
-        return 0
+        return(0)
     log.info("generating a window file: %s" % out_windows)
     outWindow = open(out_windows, 'w')
     for echr, echrlen in zip(chrs, golden_chrlen):
@@ -34,7 +34,7 @@ def generate_window_file(window_size, out_windows, overlap):
             outWindow.write('%s\t%s\t%s\n' %(echr, ewind[0], ewind[1]))
     outWindow.close()
     log.info("done!")
-    return 0
+    return(0)
 
 def MethylationSummaryStats(window_file, bedFile, bedtoolPath, category):
     ## In a bedfile you have these columns
@@ -63,7 +63,7 @@ def MethylationSummaryStats(window_file, bedFile, bedtoolPath, category):
             bedtools_command = bedtoolPath + '/' + bedtools_command
         return(awk_command + ' | ' + bedtools_command + skip_na_lines)
     else:
-        raise NotImplementedError
+        raise(NotImplementedError)
 
 def get_genomewide_methylation_WeightedMean(bedtoolPath, bedFile, outFile, window_size, overlap, category):
     outBedGraph = open(outFile, "w")

@@ -40,7 +40,7 @@ def read_allc_pandas_table(allc_file):
     if len(bsbed.columns.values) == 7:
         bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
     else:
-        raise NotImplementedError
+        raise(NotImplementedError)
     return(bsbed)
 
 def generage_h5file_from_allc(allc_id, allc_path, outFile):
@@ -65,6 +65,7 @@ chunk_size = 100000
 def generate_H5File(allcBed, chrpositions, outFile):
     h5file = h5.File(outFile, 'w')
     num_lines = len(chrpositions)
+    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i4')
     h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
     h5file.create_dataset('pos', compression="gzip", data=np.array(allcBed['pos']), shape=(allcBed.shape[0],), dtype='i4')
     h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i4')
@@ -195,6 +196,34 @@ class HDF5MethTable(object):
             yield(self.h5file['total'])
 
 
+def expand_nucleotide_code(mc_type):
+    iub_dict = {"N":["A","C","G","T"],
+                "H":["A","C","T"],
+                "D":["A","G","T"],
+                "B":["C","G","T"],
+                "A":["A","C","G"],
+                "R":["A","G"],
+                "Y":["C","T"],
+                "K":["G","T"],
+                "M":["A","C"],
+                "S":["G","C"],
+                "W":["A","T"],
+                "C":["C"],
+                "G":["G"],
+                "T":["T"],
+                "A":["A"]}
+
+    mc_class = list(mc_type) # copy
+    if "C" in mc_type:
+        mc_class.extend(["CGN", "CHG", "CHH","CNN"])
+    elif "CG" in mc_type:
+        mc_class.extend(["CGN"])
+
+    for motif in mc_type:
+        mc_class.extend(["".join(i) for i in
+                         itertools.product(*[iub_dict[nuc] for nuc in motif])])
+    return(set(mc_class))
+
 def MethylationSummaryStats(meths, filter_pos_ix, category):
     # meths is already filtered for bin_bed positions
     mc_total = meths.mc_total[filter_pos_ix]
@@ -212,7 +241,7 @@ def MethylationSummaryStats(meths, filter_pos_ix, category):
     elif category == 3: ## absolute means
         return(np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)))
     else:
-        raise NotImplementedError
+        raise(NotImplementedError)
 
 def get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg, category):
     bin_start = required_bed[1] - (required_bed[1] % binLen)
@@ -225,10 +254,10 @@ def get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg, categ
         filter_pos_ix = meths.get_filter_inds(bin_bed)
         if len(filter_pos_ix) > 0:
             req_meth_avg = MethylationSummaryStats(meths, filter_pos_ix, category)
-        if outmeths_avg is not None:
-            outmeths_avg.write("%s\t%s\t%s\t%s\n" % (bin_bed[0], bin_bed[1] + 1, bin_bed[2], req_meth_avg))
-        else:
-            print("%s\t%s\t%s\t%s\n" % (bin_bed[0], bin_bed[1] + 1, bin_bed[2], req_meth_avg))
+            if outmeths_avg is not None:
+                outmeths_avg.write("%s\t%s\t%s\t%s\n" % (bin_bed[0], bin_bed[1] + 1, bin_bed[2], req_meth_avg))
+            else:
+                print("%s\t%s\t%s\t%s\n" % (bin_bed[0], bin_bed[1] + 1, bin_bed[2], req_meth_avg))
         if bin_count % 100 == 0:
             log.info("progress: %s windows" % bin_count)
     return 0
