@@ -58,6 +58,7 @@ def get_options(program_license,program_version_message):
   permeth_parser.add_argument("-c", "--methylation_averaging_method", dest="category", help="different methylation average methods, 1 -- weighted average, 2 -- methylation calls, 3 -- average methylation per position", default = 1, type = int)
   permeth_parser.add_argument("-o", "--output", dest="outFile", help="output file.")
   permeth_parser.add_argument("-p", "--bedtools_path", dest="bedtoolsPath", help="path to bedtools used for genome wide averages")
+  permeth_parser.add_argument("-t", "--context", dest="context", help="required context to get the average, ex. CHG, CHH, CG, CTA, etc")
   permeth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   permeth_parser.set_defaults(func=bsseq_meth_average)
 

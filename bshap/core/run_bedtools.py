@@ -5,8 +5,6 @@ import os.path
 import numpy as np
 from subprocess import Popen, PIPE
 import logging
-import itertools
-import pybedtools
 
 log = logging.getLogger(__name__)
 chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
@@ -41,10 +39,12 @@ def get_weighted_average(feature):
     """
     Parsing the output of bedtools to get weighted average
     """
-    if feature[3] != '.':
-        if int(feature[3]) > 0:
-            num_c = np.sum(np.array(feature[4].split(","), dtype=int) * np.array(feature[5].split(","), dtype=float))
-            return(num_c / int(feature[3]))
+    if len(feature) < 6:
+        raise(NotImplementedError, "the bed file provided should have atleast 3 columns")
+    if feature[-3] != '.':
+        if int(feature[-3]) > 0:
+            num_c = np.sum(np.array(feature[-2].split(","), dtype=int) * np.array(feature[-2].split(","), dtype=float))
+            return(num_c / int(feature[-3]))
     return(None)
 
 def MethylationSummaryStats(window_file, bedFile, bedtoolsPath, category):
@@ -56,10 +56,14 @@ def MethylationSummaryStats(window_file, bedFile, bedtoolsPath, category):
     # Chr1	30	31	CTC	0	+	1	1
     # Chr1	32	33	CTG	0	+	1	1
     # Chr1	34	35	CAG	1	-	9	18
-    bedtools_command = 'bedtools map -a ' + window_file + ' -b ' + bedFile
+    genome_out = open("tair10.genome.txt", 'w')
+    for echr, echrlen in zip(chrs, golden_chrlen):
+        genome_out.write("%s\t%s\n" % (echr, echrlen))
+    genome_out.close()
+    bedtools_command = 'bedtools map -g tair10.genome.txt -a ' + window_file + ' -b ' + bedFile
     if bedtoolsPath is not None:
         bedtools_command = bedtoolsPath + '/' + bedtools_command
-    skip_na_lines = ' | awk \'$4 != "." {print $0}\''
+    skip_na_lines = ' | awk \'$4 != "bedtools_command." {print $0}\''
     if category == 1:   # weighted mean
         bedtools_command = bedtools_command + ' -o sum,collapse,collapse -c 8,5,7'
         return(bedtools_command)
@@ -78,8 +82,12 @@ def MethylationSummaryStats(window_file, bedFile, bedtoolsPath, category):
 def get_genomewide_methylation_WeightedMean(args):
     category = args['category']
     outBedGraph = open(args['outFile'], "w")
-    window_file = "tair10." + str(args['window_size']) + "bp_windowsize." + str(args['overlap']) + "bp_overlap.windows.txt"
-    generate_window_file(args['window_size'], args['overlap'], window_file)
+    if os.path.isfile(args['required_region']):
+        log.info("utilizing window file: %s" % args['required_region'])
+        window_file = args['required_region']
+    else:
+        window_file = "tair10." + str(args['window_size']) + "bp_windowsize." + str(args['overlap']) + "bp_overlap.windows.txt"
+        generate_window_file(args['window_size'], args['overlap'], window_file)
     full_command = MethylationSummaryStats(window_file, args['inFile'], args['bedtoolsPath'], args['category'])
     log.info("make sure the bedtools version is > v2.26.0")
     log.info('running bedtools!')
@@ -93,7 +101,10 @@ def get_genomewide_methylation_WeightedMean(args):
         for each_line in iter(convertcsv.stdout.readline, ''):
             each_bed = each_line.rstrip().split("\t")
             score = get_weighted_average(each_bed)
+            chr_start = each_bed[0] + "\t" + each_bed[1] + "\t" + each_bed[2]
             if score is not None:
-                outBedGraph.write("%s\t%s\t%s\t%s\n" % (each_bed[0], each_bed[1], each_bed[2], score))
+                outBedGraph.write("%s\t%s\n" % (chr_start, score))
+            else:
+                outBedGraph.write("%s\tnan\n" % (chr_start))
         outBedGraph.close()
         log.info('done!')
