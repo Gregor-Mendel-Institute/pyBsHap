@@ -233,7 +233,8 @@ def MethylationSummaryStats(meths, filter_pos_ix, category):
     if np.sum(mc_total) == 0:
         return(None)
     if category == 1:   # weighted mean
-        return np.divide(float(np.sum(mc_count)), np.sum(mc_total))
+        methylated_cs = np.where(meths.methylated[filter_pos_ix] == 1)[0]
+        return np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total))
     elif category == 2: # fraction of methylated positions
         methylated = meths.methylated[filter_pos_ix]
         meths_len = np.sum(methylated)
@@ -264,15 +265,13 @@ def get_Methlation_required_bed(meths, required_bed, binLen, outmeths_avg, categ
 
 def get_Methlation_GenomicRegion(args):
     # bin_bed = Chr1,1,100
-    if args['required_region'] == '0,0,0':
-        outFile =  args['outFile'] + '.bedGraph'
+    if args['required_region'] == '0,0,0' or os.path.isfile(args['required_region']):
+        args['outFile'] =  args['outFile'] + '.bedGraph'
         if args['window_size'] is None:
-            window_size = 200
-        else:
-            window_size = int(args['window_size'])
-        run_bedtools.get_genomewide_methylation_WeightedMean(args['bedtoolsPath'], args['inFile'], outFile, window_size=window_size, overlap=args['overlap'], category = args['category'])
+            args['window_size'] = 200
+        run_bedtools.get_genomewide_methylation_WeightedMean(args)
         log.info("finished!")
-        return 0
+        return(0)
     if args['allc_path'] is None:
         log.info("reading hdf5 file!")
         meths = load_hdf5_methylation_file(args['inFile'])
