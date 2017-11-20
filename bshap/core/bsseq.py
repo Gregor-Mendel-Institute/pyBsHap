@@ -3,19 +3,15 @@
 """
 import numpy as np
 import pandas as pd
-import argparse
 import logging
 import sys
 import os, os.path
 import scipy.stats as st
 import allel
-import subprocess
 from methylpy.call_mc_se import *
 from methylpy.DMRfind import DMRfind
 import glob
-import h5py
 import re
-import subprocess, shlex
 from . import meth5py
 
 log = logging.getLogger(__name__)
@@ -188,8 +184,6 @@ def parseMC_class(mc_class):
 
 def getLowFreqSites(args):
     seq_error = 0.0001
-    #allcFiles = glob.glob(args['path_to_allc'] + "/allc_" + args['sample_id'] + "*.tsv")
-    #umethfile = filter(lambda x:re.search(r"%s" % args['unMeth'], x), allcFiles)
     umethfile = args['path_to_allc'] + "/allc_" + args['sample_id'] + "_" + args['unMeth'] + ".tsv"
     if os.path.isfile(umethfile):
         conv_rate = getconv_rate_allc(umethfile)
