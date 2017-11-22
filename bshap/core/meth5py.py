@@ -65,10 +65,9 @@ chunk_size = 100000
 def generate_H5File(allcBed, chrpositions, outFile):
     h5file = h5.File(outFile, 'w')
     num_lines = len(chrpositions)
-    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i4')
+    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
     h5file.create_dataset('pos', compression="gzip", data=np.array(allcBed['pos']), shape=(allcBed.shape[0],), dtype='i4')
-    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i4')
     allc_columns = ['chr','strand','mc_class','mc_count','total','methylated']
     ## Going through all the columns
     for cols in allc_columns:
@@ -86,6 +85,22 @@ def generate_H5File(allcBed, chrpositions, outFile):
 
 def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
     return HDF5MethTable(hdf5_file, bin_bed)
+
+
+def groupby_nparray(positions, chr_start, chrslen, chunk_size):
+    ind = 0
+    for t in range(1, chrslen, chunk_size):
+        result = []
+        bin_bed = [int(t), int(t) + chunk_size - 1]
+        for epos in positions[ind:]:
+            if epos >= bin_bed[0]:
+                if epos <= bin_bed[1]:
+                    result.append(ind + chr_start)
+                elif epos > bin_bed[1] :
+                    yield(result)
+                    break
+            ind = ind + 1
+
 
 def iter_inds(t_inds):
     result = []
@@ -194,6 +209,15 @@ class HDF5MethTable(object):
                 yield(np.array(self.h5file['total'][next(inds)]))
         else:
             yield(self.h5file['total'])
+
+    def iter_windows(self, chrid, window_size):
+        chrpositions = np.append(np.array(self.h5file['chrpositions']), len(self.h5file['pos']))
+        req_chr_ind = np.where(np.array(chrs) == chrid)[0][0]
+        chr_start = chrpositions[req_chr_ind]
+        chr_end = chrpositions[req_chr_ind + 1]
+        chr_pos = self.h5file['pos'][chr_start:chr_end]
+        chr_pos_grouped = groupby_nparray(chr_pos, chr_start, chrslen[req_chr_ind], window_size)
+        return(chr_pos_grouped)
 
 
 def expand_nucleotide_code(mc_type):
