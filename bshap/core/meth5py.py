@@ -200,12 +200,7 @@ class HDF5MethTable(object):
         else:
             return(self.h5file['strand'][filter_pos_ix])
 
-    def get_mc_class(self, fiif filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['chr'][ri])
-        else:
-            yield(self.h5file['chr'])lter_pos_ix=None):
+    def get_mc_class(self, filter_pos_ix=None):
         if filter_pos_ix is None:
             return(np.array(self.h5file['mc_class']))
         elif type(filter_pos_ix) is np.ndarray:
