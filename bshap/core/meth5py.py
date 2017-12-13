@@ -101,8 +101,26 @@ def groupby_nparray(positions, chr_start, chrslen, chunk_size):
                     break
             ind = ind + 1
 
+def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True):
+    req_chr_ind_1, chr_inds_1 = meths_1.get_chrinds(chrid)
+    req_chr_ind_2, chr_inds_2 = meths_2.get_chrinds(chrid)
+    ## common positions
+    meths_1_pos = meths_1.positions[chr_inds_1[0]:chr_inds_1[1]]
+    meths_2_pos = meths_2.positions[chr_inds_2[0]:chr_inds_2[1]]
+    common_positions = np.intersect1d(meths_1_pos, meths_2_pos, assume_unique=True)
+    meths_1_creq = np.where(np.in1d(meths_1_pos, common_positions, assume_unique=True))[0]
+    meths_2_creq = np.where(np.in1d(meths_2_pos, common_positions, assume_unique=True))[0]
+    if methylated:
+        meths_1_meth = meths_1.methylated[chr_inds_1[0]:chr_inds_1[1]]
+        meths_2_meth = meths_2.methylated[chr_inds_2[0]:chr_inds_2[1]]
+        get_methylated = np.where(np.sum((meths_1_meth[meths_1_creq], meths_2_meth[meths_2_creq]), axis = 0) > 0)[0]
+        req_common_positions = common_positions[get_methylated]
+        meths_1_creq = chr_inds_1[0] + np.where(np.in1d(meths_1_pos, req_common_positions, assume_unique=True))[0]
+        meths_2_creq = chr_inds_2[0] + np.where(np.in1d(meths_2_pos, req_common_positions, assume_unique=True))[0]
+    return([meths_1_creq, meths_2_creq])
 
-def iter_inds(t_inds):
+
+def iter_inds(t_inds, chunk_size):
     result = []
     for t in t_inds:
         result.append(t)
@@ -146,77 +164,99 @@ class HDF5MethTable(object):
         return(range(req_inds[0],req_inds[1]))
 
 
-    def get_chrs(self, filter_pos_ix):
+    def get_chrs(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['chr'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['chr'][ri])
         else:
             yield(self.h5file['chr'])
 
-    def get_positions(self, filter_pos_ix):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['pos'][next(inds)]))
-        else:
+    def get_positions(self, filter_pos_ix=None):
+        if filter_pos_ix is None:
             yield(self.h5file['pos'])
+        elif type(filter_pos_ix) is np.ndarray:
+            ### provide a sorted filter_pos_ix
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative to chromosome
+            yield(self.h5file['pos'][filter_pos_ix[0]:filter_pos_ix[-1]][rel_pos_ix])
+        else:
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['pos'][ri])
 
-    def get_methylated(self, filter_pos_ix):
+    def get_methylated(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['methylated'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['methylated'][ri])
         else:
             yield(self.h5file['methylated'])
 
-    def get_strand(self, filter_pos_ix):
+    def get_strand(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['strand'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['strand'][ri])
         else:
             yield(self.h5file['strand'])
 
-    def get_mc_class(self, filter_pos_ix):
+    def get_mc_class(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['mc_class'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['mc_class'][ri])
         else:
             yield(self.h5file['mc_class'])
 
-    def get_mc_count(self, filter_pos_ix):
+    def get_mc_count(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['mc_count'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['mc_count'][ri])
         else:
             yield(self.h5file['mc_count'])
 
-    def get_lowfreq(self, filter_pos_ix):
+    def get_lowfreq(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['lowfreq'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['lowfreq'][ri])
         else:
             yield(self.h5file['lowfreq'])
 
-    def get_mc_total(self, filter_pos_ix):
+    def get_mc_total(self, filter_pos_ix=None):
         if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix)
-            for i in range(0, len(filter_pos_ix), chunk_size):
-                yield(np.array(self.h5file['total'][next(inds)]))
+            inds = iter_inds(filter_pos_ix, chunk_size)
+            for ri in inds:
+                yield(self.h5file['total'][ri])
         else:
             yield(self.h5file['total'])
 
-    def iter_windows(self, chrid, window_size):
+    def get_permeths(self, filter_pos_ix=None):
+        if filter_pos_ix is None:
+            meth_c = np.multiply(np.array(self.h5file['methylated'], dtype="float"), np.array(self.h5file['mc_count']))
+            return(np.divide(meth_c, np.array(self.h5file['total'])))
+        elif type(filter_pos_ix) is np.ndarray:
+            ## Provide a sorted numpy array to make it efficient
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative
+            methylated_cs = np.array(self.h5file['methylated'][filter_pos_ix[0]:filter_pos_ix[-1]], dtype=float)[rel_pos_ix]
+            mc_count = self.h5file['mc_count'][filter_pos_ix[0]:filter_pos_ix[-1]][rel_pos_ix]
+            mc_total = self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]][rel_pos_ix]
+            return(np.divide(np.multiply(methylated_cs, mc_count), mc_total))
+        else:
+            meth_c = np.multiply(np.array(self.h5file['methylated'][filter_pos_ix], dtype="float"), self.h5file['mc_count'][filter_pos_ix])
+            return(np.divide(meth_c, self.h5file['total'][filter_pos_ix]))
+
+    def get_chrinds(self, chrid):
         chrpositions = np.append(np.array(self.h5file['chrpositions']), len(self.h5file['pos']))
         req_chr_ind = np.where(np.array(chrs) == chrid)[0][0]
-        chr_start = chrpositions[req_chr_ind]
-        chr_end = chrpositions[req_chr_ind + 1]
-        chr_pos = self.h5file['pos'][chr_start:chr_end]
-        chr_pos_grouped = groupby_nparray(chr_pos, chr_start, chrslen[req_chr_ind], window_size)
+        chr_inds = [chrpositions[req_chr_ind], chrpositions[req_chr_ind + 1]]
+        return((req_chr_ind, chr_inds))
+
+    def iter_windows(self, chrid, window_size):
+        req_chr_ind, chr_inds = self.get_chrinds(chrid)
+        chr_pos = self.h5file['pos'][chr_inds[0]:chr_inds[1]]
+        chr_pos_grouped = groupby_nparray(chr_pos, chr_inds[0], chrslen[req_chr_ind], window_size)
         return(chr_pos_grouped)
 
 
