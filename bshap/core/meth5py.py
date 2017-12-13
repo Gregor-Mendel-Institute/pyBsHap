@@ -163,74 +163,84 @@ class HDF5MethTable(object):
         req_inds = x_chrpositions[req_chr_ind] + np.searchsorted(x_pos[req_chr_pos_inds[0]:req_chr_pos_inds[1]],[bin_bed[1],bin_bed[2]], side='right')
         return(range(req_inds[0],req_inds[1]))
 
-
     def get_chrs(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['chr']))
+        elif type(filter_pos_ix) is np.ndarray:
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['chr'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+        else:
+            return(self.h5file['chr'][filter_pos_ix])
+
+    def get_positions(self, filter_pos_ix=None):
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['pos']))
+        elif type(filter_pos_ix) is np.ndarray:
+            ### provide a sorted filter_pos_ix
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative to chromosome
+            return(self.h5file['pos'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+        else:
+            return(self.h5file['pos'][filter_pos_ix])
+
+    def get_methylated(self, filter_pos_ix=None):
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['methylated']))
+        elif type(filter_pos_ix) is np.ndarray:
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['methylated'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+        else:
+            return(self.h5file['methylated'][filter_pos_ix])
+
+    def get_strand(self, filter_pos_ix=None):
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['strand']))
+        elif type(filter_pos_ix) is np.ndarray:
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['strand'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+        else:
+            return(self.h5file['strand'][filter_pos_ix])
+
+    def get_mc_class(self, fiif filter_pos_ix is not None:
             inds = iter_inds(filter_pos_ix, chunk_size)
             for ri in inds:
                 yield(self.h5file['chr'][ri])
         else:
-            yield(self.h5file['chr'])
-
-    def get_positions(self, filter_pos_ix=None):
+            yield(self.h5file['chr'])lter_pos_ix=None):
         if filter_pos_ix is None:
-            yield(self.h5file['pos'])
+            return(np.array(self.h5file['mc_class']))
         elif type(filter_pos_ix) is np.ndarray:
-            ### provide a sorted filter_pos_ix
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative to chromosome
-            yield(self.h5file['pos'][filter_pos_ix[0]:filter_pos_ix[-1]][rel_pos_ix])
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['mc_class'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['pos'][ri])
+            return(self.h5file['mc_class'][filter_pos_ix])
 
-    def get_methylated(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['methylated'][ri])
-        else:
-            yield(self.h5file['methylated'])
-
-    def get_strand(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['strand'][ri])
-        else:
-            yield(self.h5file['strand'])
-
-    def get_mc_class(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['mc_class'][ri])
-        else:
-            yield(self.h5file['mc_class'])
 
     def get_mc_count(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['mc_count'][ri])
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['mc_count']))
+        elif type(filter_pos_ix) is np.ndarray:
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['mc_count'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            yield(self.h5file['mc_count'])
+            return(self.h5file['mc_count'][filter_pos_ix])
 
     def get_lowfreq(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['lowfreq'][ri])
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['lowfreq']))
+        elif type(filter_pos_ix) is np.ndarray:
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['lowfreq'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            yield(self.h5file['lowfreq'])
+            return(self.h5file['lowfreq'][filter_pos_ix])
 
     def get_mc_total(self, filter_pos_ix=None):
-        if filter_pos_ix is not None:
-            inds = iter_inds(filter_pos_ix, chunk_size)
-            for ri in inds:
-                yield(self.h5file['total'][ri])
+        if filter_pos_ix is None:
+            return(np.array(self.h5file['total']))
+        elif type(filter_pos_ix) is np.ndarray:
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            return(self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            yield(self.h5file['total'])
+            return(self.h5file['total'][filter_pos_ix])
 
     def get_permeths(self, filter_pos_ix=None):
         if filter_pos_ix is None:
@@ -239,9 +249,9 @@ class HDF5MethTable(object):
         elif type(filter_pos_ix) is np.ndarray:
             ## Provide a sorted numpy array to make it efficient
             rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative
-            methylated_cs = np.array(self.h5file['methylated'][filter_pos_ix[0]:filter_pos_ix[-1]], dtype=float)[rel_pos_ix]
-            mc_count = self.h5file['mc_count'][filter_pos_ix[0]:filter_pos_ix[-1]][rel_pos_ix]
-            mc_total = self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]][rel_pos_ix]
+            methylated_cs = np.array(self.h5file['methylated'][filter_pos_ix[0]:filter_pos_ix[-1]+1], dtype=float)[rel_pos_ix]
+            mc_count = self.h5file['mc_count'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix]
+            mc_total = self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix]
             return(np.divide(np.multiply(methylated_cs, mc_count), mc_total))
         else:
             meth_c = np.multiply(np.array(self.h5file['methylated'][filter_pos_ix], dtype="float"), self.h5file['mc_count'][filter_pos_ix])
