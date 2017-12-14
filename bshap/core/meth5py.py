@@ -101,22 +101,25 @@ def groupby_nparray(positions, chr_start, chrslen, chunk_size):
                     break
             ind = ind + 1
 
-def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True):
+def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True, read_threshold = 5):
     req_chr_ind_1, chr_inds_1 = meths_1.get_chrinds(chrid)
     req_chr_ind_2, chr_inds_2 = meths_2.get_chrinds(chrid)
-    ## common positions
-    meths_1_pos = meths_1.positions[chr_inds_1[0]:chr_inds_1[1]]
-    meths_2_pos = meths_2.positions[chr_inds_2[0]:chr_inds_2[1]]
+    ## Filter the positions based on read_threshold
+    meths_1_creq = chr_inds_1[0] + np.where(meths_1.mc_total[chr_inds_1[0]:chr_inds_1[1]] > read_threshold)[0]
+    meths_2_creq = chr_inds_2[0] + np.where(meths_2.mc_total[chr_inds_2[0]:chr_inds_2[1]] > read_threshold)[0]
+    ## Common positions
+    meths_1_pos = meths_1.get_positions(meths_1_creq)
+    meths_2_pos = meths_2.get_positions(meths_2_creq)
     common_positions = np.intersect1d(meths_1_pos, meths_2_pos, assume_unique=True)
-    meths_1_creq = np.where(np.in1d(meths_1_pos, common_positions, assume_unique=True))[0]
-    meths_2_creq = np.where(np.in1d(meths_2_pos, common_positions, assume_unique=True))[0]
+    meths_1_creq = meths_1_creq[np.where(np.in1d(meths_1_pos, common_positions, assume_unique=True))[0]]
+    meths_2_creq = meths_2_creq[np.where(np.in1d(meths_2_pos, common_positions, assume_unique=True))[0]]
+    ## Now have to filter out the non methylated positions if present
     if methylated:
-        meths_1_meth = meths_1.methylated[chr_inds_1[0]:chr_inds_1[1]]
-        meths_2_meth = meths_2.methylated[chr_inds_2[0]:chr_inds_2[1]]
-        get_methylated = np.where(np.sum((meths_1_meth[meths_1_creq], meths_2_meth[meths_2_creq]), axis = 0) > 0)[0]
-        req_common_positions = common_positions[get_methylated]
-        meths_1_creq = chr_inds_1[0] + np.where(np.in1d(meths_1_pos, req_common_positions, assume_unique=True))[0]
-        meths_2_creq = chr_inds_2[0] + np.where(np.in1d(meths_2_pos, req_common_positions, assume_unique=True))[0]
+        meths_1_meth = meths_1.get_methylated(meths_1_creq)
+        meths_2_meth = meths_2.get_methylated(meths_2_creq)
+        get_methylated = np.where(np.sum((meths_1_meth, meths_2_meth), axis = 0) > 0)[0]
+        meths_1_creq = meths_1_creq[get_methylated]
+        meths_2_creq = meths_2_creq[get_methylated]
     return([meths_1_creq, meths_2_creq])
 
 
@@ -209,6 +212,16 @@ class HDF5MethTable(object):
         else:
             return(self.h5file['mc_class'][filter_pos_ix])
 
+    def get_req_mc_class_ix(self, req_context, filter_pos_ix):
+        if req_context is None:
+            if filter_pos_ix is not None:
+                return(np.arange(len(filter_pos_ix)))
+            else:
+                return(None)
+        import re
+        cor = re.compile(req_context)
+        np_vmatch = np.vectorize(lambda x:bool(cor.match(x)))
+        return(np.where(np_vmatch(self.get_mc_class(filter_pos_ix)))[0])
 
     def get_mc_count(self, filter_pos_ix=None):
         if filter_pos_ix is None:
