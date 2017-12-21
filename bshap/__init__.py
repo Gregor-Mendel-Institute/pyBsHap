@@ -50,15 +50,15 @@ def get_options(program_license,program_version_message):
   methbam.set_defaults(func=bshap_methbam)
 
   permeth_parser = subparsers.add_parser('methylation_percentage', help="Get methylation percentage on the given bin position.")
-  permeth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files")
-  permeth_parser.add_argument("-a", "--allc_path", dest="allc_path", help="If given allc files, path to the files is given here and the sample ID in the -i option.")
+  permeth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files", required=True)
+  permeth_parser.add_argument("-a", "--allc_path", dest="allc_path", help="Possible options: 1) Bash path, allc files from this path with sample ID are used. 2) hdf5, then the input file is a hdf5 formatted file. 3) bed, the input file is a bed file (also gzipped).", required=True)
   permeth_parser.add_argument("-b", "--required_region", dest="required_region", help="Bed region to calculate the methylation averages. ex. Chr1,1,100", default = '0,0,0')
-  permeth_parser.add_argument("-w", "--window_size", dest="window_size", help="window size to get the methylation averages", type = int)
+  permeth_parser.add_argument("-w", "--window_size", dest="window_size", help="window size to get the methylation averages", type = int, default=200)
   permeth_parser.add_argument("-x", "--overlap", dest="overlap", type=int, help="overlap in the windows generated", default=0)
   permeth_parser.add_argument("-c", "--methylation_averaging_method", dest="category", help="different methylation average methods, 1 -- weighted average, 2 -- methylation calls, 3 -- average methylation per position", default = 1, type = int)
   permeth_parser.add_argument("-o", "--output", dest="outFile", help="output file.")
   permeth_parser.add_argument("-p", "--bedtools_path", dest="bedtoolsPath", help="path to bedtools used for genome wide averages")
-  permeth_parser.add_argument("-t", "--context", dest="context", help="required context to get the average, ex. CHG, CHH, CG, CTA, etc")
+  permeth_parser.add_argument("-t", "--context", dest="context", help="required context to get the average, ex. C[ATC]G, C[ATC][ATC], CG, CTA, etc")
   permeth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   permeth_parser.set_defaults(func=bsseq_meth_average)
 
@@ -148,7 +148,7 @@ def lowfindfind(args):
     bsseq.getLowFreqSites(args)
 
 def bsseq_meth_average(args):
-    meth5py.get_Methlation_GenomicRegion(args)
+    meth5py.potatoskin_methylation_averages(args)
 
 
 def main():

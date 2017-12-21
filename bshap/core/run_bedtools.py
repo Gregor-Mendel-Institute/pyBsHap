@@ -79,7 +79,7 @@ def MethylationSummaryStats(window_file, bedFile, bedtoolsPath, category):
     else:
         raise(NotImplementedError)
 
-def get_genomewide_methylation_WeightedMean(args):
+def get_genomewide_methylation_average(args):
     category = args['category']
     outBedGraph = open(args['outFile'], "w")
     if os.path.isfile(args['required_region']):
