@@ -383,7 +383,7 @@ def potatoskin_methylation_averages(args):
         meths = load_hdf5_methylation_file(outhdf5)
         log.info("done!")
     if args['required_region'] == '0,0,0':
-        meths.generate_meths_in_windows(args['window_size'], category=args['category'], req_context=args['context'])
+        generate_meths_in_windows(meths, args['window_size'], category=args['category'], req_context=args['context'])
         return(0)
     if args['outFile'] is not None:
         outmeths_avg = open(args['outFile'], 'w')

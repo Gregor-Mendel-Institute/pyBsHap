@@ -158,7 +158,7 @@ def methylpy_dmrfind(args):
     for chrom in chrs:
         region_dict[chrom] = [0, 5000000000]
     mc_type = args['mc_type'].split(",")
-    samples = args['sample_id'].split(",")
+    samples = args['sample_ids'].split(",")
     if args['sample_cat'] == '0':
         sample_cat=range(0, len(samples))
     else:   ## if samples given some categories

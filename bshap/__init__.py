@@ -13,6 +13,7 @@ from bshap.core import prebshap
 from bshap.core import bsseq
 from bshap.core import bamEdit
 from bshap.core import meth5py
+from bshap.core import plotting
 import logging, logging.config
 
 __version__ = '0.0.1'
