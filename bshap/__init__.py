@@ -16,8 +16,8 @@ from bshap.core import meth5py
 from bshap.core import plotting
 import logging, logging.config
 
-__version__ = '0.0.1'
-__updated__ = "05.05.2017"
+__version__ = '1.0.0'
+__updated__ = "05.01.2018"
 __date__ = "10.12.2016"
 
 def setLog(logDebug):
