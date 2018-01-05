@@ -5,11 +5,54 @@ import os.path
 import numpy as np
 from subprocess import Popen, PIPE
 import logging
+import pandas as pd
 
 log = logging.getLogger(__name__)
 chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
 golden_chrlen = [30427671, 19698289, 23459830, 18585056, 26975502]
 entire_chrslen = [34964571, 22037565, 25499034, 20862711, 31270811]
+
+def identify_positions_given_names(in_file, araport11_file):
+    if araport11_file is None:
+        raise(NotImplementedError)
+    else:
+        araport11 = pd.read_csv(araport11_file, header = None, sep = "\t")
+    bed_names = np.array(pd.read_csv(in_file, header = None)[0])
+    req_bed_df = araport11.loc[araport11[3].isin(bed_names),]
+    return(req_bed_df)
+
+def get_filter_bed_ix(bed_file, input_bed, just_names=True, araport11_file=None):
+    ## Here input_bed is a pandas dataframe
+    import pybedtools as pybed
+    if not isinstance(input_bed, pd.DataFrame):
+        raise(NotImplementedError)
+    ## In case of just_names the the bed_file contains only names
+    if not os.path.isfile(bed_file):
+        raise NameError("file is not present, check file name")
+    if just_names:
+        req_bed_df = identify_positions_given_names(bed_file, araport11_file)
+        req_bed = pybed.BedTool.from_dataframe(req_bed_df.loc[:,[0,1,2]])
+    else:
+        req_bed = pybed.BedTool(bed_file)
+    inBed = pybed.BedTool.from_dataframe(input_bed.loc[:,[0,1,2]])
+    ## Just taking first three columns for bedtools
+    unionBed = inBed.intersect(req_bed, wa=True).to_dataframe() ## wa is to return the entire bed.
+    total_cols = np.array(input_bed.loc[:,0] + "," + input_bed.loc[:,1].map(str) + "," +  input_bed.loc[:,2].map(str), dtype="str")
+    unionBed_cols = np.array(unionBed["chrom"] + "," + unionBed["start"].map(str) + "," +  unionBed["end"].map(str), dtype="str")
+    return(np.where(np.in1d(total_cols, unionBed_cols))[0])
+
+def get_filter_pos_echr(bed_file, chrid, common_positions, just_names = True, araport11_file=None):
+    filter_inds = []
+    if just_names:
+        req_name_pos = identify_positions_given_names(bed_file, araport11_file)
+    else:
+        req_name_pos = pd.read_table(bed_file, header = None)
+        req_name_pos = req_name_pos.loc[req_name_pos[0] == chrid]
+    for e_ind, e_pos in req_name_pos.iterrows():
+        pos_inds = np.searchsorted(common_positions,[e_pos[1],e_pos[2]], side='right')
+        filter_inds.extend(range(pos_inds[0],pos_inds[1]))
+        #color_scatter[pos_inds[0]:pos_inds[1]] = replace_to
+    return(np.array(filter_inds))
 
 def windows(seqlength, window_size, overlap):
     if overlap >= window_size:

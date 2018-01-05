@@ -279,14 +279,11 @@ class HDF5MethTable(object):
         return(chr_pos_grouped)
 
 
-def generate_meths_in_windows(meths, window_size, category=1, req_context=None):
+def generate_meths_in_windows(meths, out_file, window_size, category=1, req_context=None):
     ## Methylation category here by default is weighted average
     # look the function below (MethylationSummaryStats).
-    split_input = os.path.splitext(meths.h5file.filename)
-    out_file = split_input[0] + ".wind%sbp" % window_size + ".MA.bedGraph"
     if os.path.isfile(out_file):
-        log.info("ouput bedgraph file (%s) is already present" % out_file)
-        return("done!")
+        die("ouput bedgraph file (%s) is already present" % out_file)
     outmeths_avg = open(out_file, 'w')
     for echr, echrlen in zip(chrs, golden_chrlen):
         self_windows = meths.iter_windows(echr, window_size)
@@ -298,7 +295,7 @@ def generate_meths_in_windows(meths, window_size, category=1, req_context=None):
             if count % 1000 == 0:
                 log.info("progress: analysed %s windows" % count)
     outmeths_avg.close()
-    return("done!")
+    log.info("done!")
 
 def expand_nucleotide_code(mc_type):
     iub_dict = {"N":["A","C","G","T"],
@@ -331,23 +328,23 @@ def expand_nucleotide_code(mc_type):
 def MethylationSummaryStats(meths, filter_pos_ix, category, req_context = None):
     # meths is already filtered for bin_bed positions
     if len(filter_pos_ix) == 0:
-        return(None)
+        return(np.nan)
     # Filtering for context
     if req_context is not None:
         filter_pos_ix = np.array(filter_pos_ix, dtype=int)[meths.get_req_mc_class_ix(req_context, filter_pos_ix)]
         if len(filter_pos_ix) == 0:
-            return(None)
+            return(np.nan)
     mc_total = meths.get_mc_total(filter_pos_ix)
     mc_count = meths.get_mc_count(filter_pos_ix)
     if np.sum(mc_total) == 0:
-        return(None)
+        return(np.nan)
     if category == 1:   # weighted mean
         methylated_cs = np.where(meths.get_methylated(filter_pos_ix) == 1)[0]
-        return np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total))
+        return(np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total)))
     elif category == 2: # fraction of methylated positions
         methylated = meths.get_methylated(filter_pos_ix)
         meths_len = np.sum(methylated)
-        return float(meths_len)/len(filter_pos_ix)
+        return(float(meths_len)/len(filter_pos_ix))
     elif category == 3: ## absolute means
         return(np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)))
     else:
@@ -358,7 +355,7 @@ def methylation_average_required_bed(meths, required_bed, outmeths_avg, category
     filter_pos_ix = meths.get_filter_inds(required_bed)
     req_meth_avg = MethylationSummaryStats(meths, filter_pos_ix, category)
     if outmeths_avg is not None:
-        outmeths_avg.write("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1] + 1, required_bed[2], req_meth_avg))
+        outmeths_avg.write("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1], required_bed[2], req_meth_avg))
     else:
         print("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1] + 1, required_bed[2], req_meth_avg))
 
@@ -383,7 +380,7 @@ def potatoskin_methylation_averages(args):
         meths = load_hdf5_methylation_file(outhdf5)
         log.info("done!")
     if args['required_region'] == '0,0,0':
-        generate_meths_in_windows(meths, args['window_size'], category=args['category'], req_context=args['context'])
+        generate_meths_in_windows(meths, args['outFile'], args['window_size'], category=args['category'], req_context=args['context'])
         return(0)
     if args['outFile'] is not None:
         outmeths_avg = open(args['outFile'], 'w')
