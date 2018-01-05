@@ -48,6 +48,6 @@ def meths_jointplot(x, y, reqcond, kde=True, hexplt=False):
     p.set_axis_labels(reqcond['xlab'], reqcond['ylab'])
     p = p.annotate(stats.pearsonr, template="{stat}: {val:.2f}; npts: %s" % len(p.x), fontsize=12)
     p.ax_joint.plot(reqcond['plt_limits'], reqcond['plt_limits'], ':k')
-        p.ax_marg_x.axis([reqcond['plt_limits'][0], reqcond['plt_limits'][1], 0, len(p.x)/5])
-        p.ax_marg_y.axis([0, len(p.x)/5, reqcond['plt_limits'][0], reqcond['plt_limits'][1]])
+    p.ax_marg_x.axis([reqcond['plt_limits'][0], reqcond['plt_limits'][1], 0, len(p.x)/5])
+    p.ax_marg_y.axis([0, len(p.x)/5, reqcond['plt_limits'][0], reqcond['plt_limits'][1]])
     return(p)
