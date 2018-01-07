@@ -14,9 +14,8 @@ entire_chrslen = [34964571, 22037565, 25499034, 20862711, 31270811]
 
 def identify_positions_given_names(in_file, araport11_file):
     if araport11_file is None:
-        raise(NotImplementedError)
-    else:
-        araport11 = pd.read_csv(araport11_file, header = None, sep = "\t")
+        raise NameError("please give araport file to get positions")
+    araport11 = pd.read_csv(araport11_file, header = None, sep = "\t")
     bed_names = np.array(pd.read_csv(in_file, header = None)[0])
     req_bed_df = araport11.loc[araport11[3].isin(bed_names),]
     return(req_bed_df)
@@ -45,6 +44,7 @@ def get_filter_pos_echr(bed_file, chrid, common_positions, just_names = True, ar
     filter_inds = []
     if just_names:
         req_name_pos = identify_positions_given_names(bed_file, araport11_file)
+        req_name_pos = req_name_pos.loc[req_name_pos[0] == chrid]
     else:
         req_name_pos = pd.read_table(bed_file, header = None)
         req_name_pos = req_name_pos.loc[req_name_pos[0] == chrid]
