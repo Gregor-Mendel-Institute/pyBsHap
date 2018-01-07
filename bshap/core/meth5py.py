@@ -288,6 +288,7 @@ def generate_meths_in_windows(meths, out_file, window_size, category=1, req_cont
     for echr, echrlen in zip(chrs, golden_chrlen):
         self_windows = meths.iter_windows(echr, window_size)
         count = 0
+        log.info("analyzing %s" % echr)
         for ewin in self_windows:
             req_meth_avg = MethylationSummaryStats(meths, ewin[1], category, req_context)
             outmeths_avg.write("%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg))
