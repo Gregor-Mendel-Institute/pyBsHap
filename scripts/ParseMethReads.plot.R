@@ -100,6 +100,13 @@ getWMA_default_plot <- function(check.gr, input_h5file, meths_fol, input_id, upd
   axis(1, at = end(check.gr), labels = "end", lwd.ticks = 5, line =0.5)
 }
 
+get_meth_colors = function(num.rows){
+  if (num.rows == 10){
+    #meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[num.rows:2])
+    #return(c("grey", brewer.pal(num.rows-1, "Blues")))
+    return(c("grey", brewer.pal(num.rows-1, "GnBu")))
+  }
+}
 
 getMethWinds <- function(check.gr,input_h5file, updown){
   num.rows <- 10
@@ -138,11 +145,11 @@ meth.region.plot <- function(check.gr,input_h5file, title="", updown = 2000){
   num.rows <- 10
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   chrom.mat = getMethWinds(check.gr,input_h5file, updown)[[1]] ### Taking only the totals
-  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[num.rows:2])
+  meth.colors <- get_meth_colors(num.rows = num.rows)
   input_bam <- h5read(input_h5file, "input_bam")
   binlen = h5read(input_h5file, "binlen")
   cex.plot <- 1.5
-  barplot(chrom.mat, space = 0, col = meth.colors, border = F, las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste(title, ",", input_h5file))
+  barplot(chrom.mat, space = 0, col = meth.colors, border = "#bdbdbd", las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste(title, ",", input_h5file))
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = as.integer(updown/binlen), labels = "start", lwd.ticks = 5, line =0.5)
   axis(1, at = length(colnames(chrom.mat)), labels = paste("+", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
@@ -165,7 +172,7 @@ drawMethPlot <- function(check.gr, input_h5file, context, max_reads, updown, cex
   meth.breaks <- c(-1, seq(0, 1, length.out = num.rows))
   check.pos <- c(which(meths.chrs == as.character(seqnames(check.gr))), start(check.gr) - updown, end(check.gr) + updown)
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
-  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  meth.colors <- get_meth_colors(num.rows = num.rows)
   plot(-10, -10, xlim = c(0, length(check.region)), ylim = c(0, max_reads + 30), ylab = "Number of reads", xaxt = "n", xlab = "", cex.lab = cex.plot, frame.plot=FALSE)
   input_h5file_groups <- h5ls(input_h5file)
   for (xind in seq(length(check.region))){
@@ -192,8 +199,7 @@ meth.region.plot.contexts <- function(check.gr,input_h5file, mtitle = "", updown
   check.region <- as.character(seq(check.pos[2] + 1 - (check.pos[2] %% binlen), check.pos[3], binlen))
   num.rows = 10
   cex.plot = 1.5
-  meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[num.rows:2])
-  #meth.colors <- c("grey", brewer.pal(num.rows, "Spectral")[(num.rows-1):1])
+  meth.colors <- get_meth_colors(num.rows = num.rows)
   zones=matrix(c(1,1,2,2,3,3,4), ncol=1, byrow=T)
   layout(zones)
   par(mar=c(1,4.5,1,2))
@@ -265,7 +271,7 @@ Sys.setenv("PATH" = paste(Sys.getenv("PATH"), "~/py2_kernel/bin", sep = ":"))
 
 bs.bams <- c("/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534177/SRR534177_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam")
 bs.bams <- as.list(bs.bams)
-names(bs.bams) <- c("WT, Stroud et. al. (Col-0)", "root tip (Col-0)", "columella root cap cells (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)")
+names(bs.bams) <- c("WT, Stroud et. al. (Col-0)", "root tip (Col-0)", "columella root cap (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)")
 
 ara.ind <- 161
 ara.ind <- 106
@@ -283,7 +289,11 @@ check.gr <- araport.gff[ara.ind]
 
 #check.gr <- GRanges(seqnames = c("ChrC"), ranges = IRanges(start = 1, end = 154478), Name = "ChrC", type = "whole chroloplast genome")   ### Entire ChrC
 
-i = 1
+## Checking DMRs between the root tissues.
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 423086, end = 424360), Name = "DMR1", type = "AT1TE01370")   ### TE1 in DMR
+
+
+i = 4
 i = 5
 i = 7
 i = 9
@@ -300,7 +310,7 @@ system(pybshap.command)
 
 input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 
-#meth.region.plot(check.gr,input_h5file, updown = updown, title = names(bs.bams)[i])
+meth.region.plot(check.gr,input_h5file, updown = updown, title = names(bs.bams)[i])
 meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown, max_reads = 40)
 dev.off()
 

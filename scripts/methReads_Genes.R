@@ -124,8 +124,6 @@ araport.genes.stend <- paste(araport.genes$V1,araport.genes$V2,araport.genes$V3,
 init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
 
 mutant.data <- read.table("/projects/cegs/rahul/013.alignMutants/01.MutantsStraud.GSE39901/SraRunTable_StroudMutants.txt", sep = "\t", header = T, as.is = T)
-
-
 methreads.fol <- "/lustre/scratch/projects/cegs/rahul/016.bshap/005.mutants.GSE39901/001.methReads_aragenes/"
 methreads.files <- list.files(methreads.fol, pattern = "summary.txt")
 
@@ -201,6 +199,58 @@ head(required.frac.methreads)
 Heatmap(na.omit(required.frac.methreads[1:10000,]), cluster_rows=T,cluster_columns =T, col=brewer.pal(11, "Spectral")[11:1], show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = paste("%", init_cls[required.frac.ind]), color_bar = "continuous"))
 
 clustering_distance_rows = "binary"
+
+
+####
+## Checking the read bshap for different tissues in root meristem. 
+###
+init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
+root.data <- read.table("/projects/cegs/rahul/017.RootMeristem.Taiji2016/SraRunTable_rootTaiji.txt", sep = "\t", header = T, as.is = T)
+methreads.fol <- "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/003.selectedDMRs/"
+setwd(methreads.fol)
+
+req_list=read.table("dmr_chh_rms_results_collapsed.filtered.bed", as.is = T)
+methreads.files <- list.files(methreads.fol, pattern = "[.]dmr.summary.txt")
+
+req_list = read.table("dmr_chh_rms_results_collapsed.random.bed", as.is = T)
+methreads.files <- list.files(methreads.fol, pattern = "[.]nodmr.summary.txt")
+
+
+req_list = paste(req_list$V1,req_list$V2,req_list$V3, sep = ",")
+required.frac.ind <- 11
+init_cls[required.frac.ind]
+
+required.frac.methreads <- c()
+for(mut in methreads.files){
+  t.req.frac <- rep(NA, length(req_list))
+  t.id <- root.data$source_name_s[which(root.data$Run_s == unlist(strsplit(mut, "[.]"))[2])]
+  try(t.mut <- read.csv(file = file.path(methreads.fol, mut), header = F), silent = T)
+  if(inherits(t.mut, 'try-error')) {next}
+  req.sums <- rowSums(t.mut[,c(5,6,7,8,9,10,11)])
+  ### taking the fraction of required column
+  sample.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")[which(req.sums > 0)]
+  common.ids <- sample.ids[which(sample.ids %in% req_list)]
+  t.req.inds <- which(sample.ids %in% common.ids)
+  t.req.frac[which(req_list %in% common.ids)] = t.mut[t.req.inds,required.frac.ind] / req.sums[t.req.inds]
+  ### Now plotting the absolute numbers
+  #sample.ids <- paste(t.mut[,c(1)],t.mut[,c(2)],t.mut[,c(3)], sep = ",")
+  #common.ids <- sample.ids[which(sample.ids %in% req_list)]
+  #req.nums <- log10(t.mut[,required.frac.ind])
+  #req.nums[req.nums == -Inf] = 0
+  #t.req.frac[which(req_list %in% common.ids)] = req.nums
+  ###
+  required.frac.methreads <- cbind(required.frac.methreads, t.req.frac)
+  colnames(required.frac.methreads)[length(colnames(required.frac.methreads))] <- t.id
+}
+
+nrow(required.frac.methreads)
+head(required.frac.methreads)
+
+pdf("temp.nodmr.pdf")
+Heatmap(na.omit(required.frac.methreads), cluster_rows=T,cluster_columns =T, col=brewer.pal(11, "Spectral")[11:1], show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = paste("%", init_cls[required.frac.ind]), color_bar = "continuous"), clustering_method_columns = "ward.D")
+dev.off()
+
+
 
 
 

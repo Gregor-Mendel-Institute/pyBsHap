@@ -87,21 +87,8 @@ def generate_H5File(allcBed, chrpositions, outFile):
 def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
     return HDF5MethTable(hdf5_file, bin_bed)
 
-
-def groupby_nparray(positions, chr_start, chrslen, chunk_size):
-    ind = 0
-    for t in range(1, chrslen, chunk_size):
-        result = []
-        bin_bed = [int(t), int(t) + chunk_size - 1]
-        for epos in positions[ind:]:
-            if epos >= bin_bed[0]:
-                if epos <= bin_bed[1]:
-                    result.append(ind + chr_start)
-                elif epos > bin_bed[1] :
-                    yield((bin_bed, result))
-                    break
-            ind = ind + 1
-
+### This function below is deprecated. migrate to functions below which are more versatile.
+# also permeth now returns -1 which are based on the read_threshold
 def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True, read_threshold = 5):
     req_chr_ind_1, chr_inds_1 = meths_1.get_chrinds(chrid)
     req_chr_ind_2, chr_inds_2 = meths_2.get_chrinds(chrid)
@@ -123,6 +110,33 @@ def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True, read_threshold
         meths_2_creq = meths_2_creq[get_methylated]
     return([meths_1_creq, meths_2_creq])
 
+def derive_common_positions_echr(meths_list, chrid):
+    ## Caution: would probably need much memory if you give many files.
+    # meth_list is a list of meths meth5py object read
+    # returns common positions.
+    chrid_ind = meths_list[0].get_chrinds(chrid)[0]
+    common_positions = np.arange(golden_chrlen[chrid_ind], dtype="int")
+    for m in meths_list:
+        m.chrinds = m.get_chrinds(chrid)
+        common_positions = np.intersect1d(common_positions, m.positions[m.chrinds[1][0]:m.chrinds[1][1]], assume_unique = True)
+    ## Now we have common positions, get the indices which are common.
+    for m in meths_list:
+        m_filter_inds = m.chrinds[1][0] + np.where(np.in1d(m.positions[m.chrinds[1][0]:m.chrinds[1][1]], common_positions, assume_unique=True))[0]
+        if m.filter_pos_ix is None:  ## This is to mainly append when checking for all the chromosomes.
+            m.filter_pos_ix = m_filter_inds
+        else:
+            m.filter_pos_ix = np.append(m.filter_pos_ix, m_filter_inds)
+    return(meths_list)
+
+def derive_common_positions(meths_list):
+    ## Here you get all the common positions going in a loop for each chromosome.
+    # It might be some time consuming.
+    for e_chr in chrs:
+        # the function below is appending the list m.filter_pos_ix
+        # So, make sure you have some place in the RAM.
+        log.info("reading in through the chromosome %s" % e_chr)
+        derive_common_positions_echr(meths_list, e_chr)
+    return(meths_list)
 
 def iter_inds(t_inds, chunk_size):
     result = []
@@ -133,6 +147,21 @@ def iter_inds(t_inds, chunk_size):
             result = []
     if result:
         yield(result)
+
+def groupby_nparray(positions, chr_start, chrslen, chunk_size):
+    ind = 0
+    for t in range(1, chrslen, chunk_size):
+        result = []
+        bin_bed = [int(t), int(t) + chunk_size - 1]
+        for epos in positions[ind:]:
+            if epos >= bin_bed[0]:
+                if epos <= bin_bed[1]:
+                    result.append(ind + chr_start)
+                elif epos > bin_bed[1] :
+                    yield((bin_bed, result))
+                    break
+            ind = ind + 1
+
 
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
@@ -250,21 +279,25 @@ class HDF5MethTable(object):
             return(self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
             return(self.h5file['total'][filter_pos_ix])
-
-    def get_permeths(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            meth_c = np.multiply(np.array(self.h5file['methylated'], dtype="float"), np.array(self.h5file['mc_count']))
-            return(np.divide(meth_c, np.array(self.h5file['total'])))
-        elif type(filter_pos_ix) is np.ndarray:
-            ## Provide a sorted numpy array to make it efficient
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative
-            methylated_cs = np.array(self.h5file['methylated'][filter_pos_ix[0]:filter_pos_ix[-1]+1], dtype=float)[rel_pos_ix]
-            mc_count = self.h5file['mc_count'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix]
-            mc_total = self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix]
-            return(np.divide(np.multiply(methylated_cs, mc_count), mc_total))
+    
+    def get_permeths(self, filter_pos_ix=None, read_threshold=0):
+	# If read_threshold is given
+	#   if methylated then we have a value
+	#   else the value is 0
+	# Else the notation is -1
+        methylated_cs = np.array(self.get_methylated(filter_pos_ix), dtype="float")
+        mc_count = self.get_mc_count(filter_pos_ix)
+        mc_total = self.get_mc_total(filter_pos_ix)
+        calculated_permeths = np.divide(np.multiply(methylated_cs, mc_count), mc_total)
+        if read_threshold == 0:
+            return(calculated_permeths)
         else:
-            meth_c = np.multiply(np.array(self.h5file['methylated'][filter_pos_ix], dtype="float"), self.h5file['mc_count'][filter_pos_ix])
-            return(np.divide(meth_c, self.h5file['total'][filter_pos_ix]))
+            if filter_pos_ix is None:
+                filter_pos_ix = np.arange(len(mc_total))
+            permeths = np.repeat(-1.0, len(filter_pos_ix))
+            new_filter_pos_ix = np.where(mc_total > read_threshold)[0]
+            permeths[new_filter_pos_ix] = calculated_permeths[new_filter_pos_ix]
+            return(permeths)
 
     def get_chrinds(self, chrid):
         chrpositions = np.append(np.array(self.h5file['chrpositions']), len(self.h5file['pos']))
