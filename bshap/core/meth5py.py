@@ -138,7 +138,7 @@ def derive_common_positions(meths_list):
         derive_common_positions_echr(meths_list, e_chr)
     return(meths_list)
 
-def write_combined_h5_permeths(meths_list, output_file):
+def write_combined_h5_permeths(meths_list, output_file, read_threshold=5):
     ### Here the input is a list of meths object all the hdf5 files
     meths_file_names = [ m.h5file.filename.encode('utf8') for m in meths_list ]
     len_filter = [ len(m.filter_pos_ix) for m in meths_list ]
@@ -159,7 +159,7 @@ def write_combined_h5_permeths(meths_list, output_file):
     outh5file.create_dataset('permeth', shape=(num_positions, num_lines), dtype='float', compression="gzip", chunks=((chunk_size, 1)))
     outh5file.create_dataset('filter_pos_ix', shape=(num_positions, num_lines), dtype='int', compression="gzip", chunks=((chunk_size, 1)))
     for i in range(len(meths_list)):
-        outh5file['permeth'][:,i] = meths_list[i].get_permeths(meths_list[i].filter_pos_ix)
+        outh5file['permeth'][:,i] = meths_list[i].get_permeths(meths_list[i].filter_pos_ix, read_threshold)
         outh5file['filter_pos_ix'][:,i] = meths_list[i].filter_pos_ix
     outh5file.close()
     log.info("done")
