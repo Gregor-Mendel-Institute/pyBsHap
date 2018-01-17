@@ -138,6 +138,32 @@ def derive_common_positions(meths_list):
         derive_common_positions_echr(meths_list, e_chr)
     return(meths_list)
 
+def write_combined_h5_permeths(meths_list, output_file):
+    ### Here the input is a list of meths object all the hdf5 files
+    meths_file_names = [ m.h5file.filename.encode('utf8') for m in meths_list ]
+    len_filter = [ len(m.filter_pos_ix) for m in meths_list ]
+    if not all(x == len_filter[0] for x in len_filter):
+        die("please provide meths_list with corresponding positons in each")
+    log.info("writing the data into h5 file")
+    num_positions = len(meths_list[0].filter_pos_ix)
+    num_lines = len(meths_list)
+    outh5file = h5.File(output_file, 'w')
+    outh5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
+    outh5file.create_dataset('num_lines', data=num_lines, shape=(1,),dtype='i4')
+    outh5file.create_dataset('num_positions', data=num_positions, shape=(1,),dtype='i4')
+    outh5file.create_dataset('file_names', data=meths_file_names, shape=(num_lines,),dtype='S8')
+    ## Add chromosome and positions from the first meth files
+    outh5file.create_dataset('pos', compression="gzip", data=meths_list[0].get_positions(meths_list[0].filter_pos_ix), shape=(num_positions,), dtype='i4')
+    outh5file.create_dataset('chr', compression="gzip", data=meths_list[0].get_chrs_list(meths_list[0].filter_pos_ix), shape=(num_positions,), dtype='S8')
+    ## Below the file is chunked the same way as a normal meths file. check this
+    outh5file.create_dataset('permeth', shape=(num_positions, num_lines), dtype='float', compression="gzip", chunks=((chunk_size, 1)))
+    outh5file.create_dataset('filter_pos_ix', shape=(num_positions, num_lines), dtype='int', compression="gzip", chunks=((chunk_size, 1)))
+    for i in range(len(meths_list)):
+        outh5file['permeth'][:,i] = meths_list[i].get_permeths(meths_list[i].filter_pos_ix)
+        outh5file['filter_pos_ix'][:,i] = meths_list[i].filter_pos_ix
+    outh5file.close()
+    log.info("done")
+
 def iter_inds(t_inds, chunk_size):
     result = []
     for t in t_inds:
@@ -279,7 +305,7 @@ class HDF5MethTable(object):
             return(self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
             return(self.h5file['total'][filter_pos_ix])
-    
+
     def get_permeths(self, filter_pos_ix=None, read_threshold=0):
 	# If read_threshold is given
 	#   if methylated then we have a value

@@ -10,10 +10,10 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='pyBsHap',
-    version='1.0.0',
+    version='1.1.0',
     description='refined bs-seq toolkit',
     long_description=long_description,
-    url='https://github.com/rbpisupati/pyBsHap',
+    url='https://github.com/Gregor-Mendel-Institute/pyBsHap',
     author=['Rahul Pisupati'],
     author_email='rahul.bharadwaj.p@gmail.com',
     license='GMI',
