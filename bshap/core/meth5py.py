@@ -81,7 +81,7 @@ def generate_H5File(allcBed, chrpositions, outFile):
             try:
                 h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]), shape=(allcBed.shape[0],),chunks = ((chunk_size,)))
             except TypeError:
-                h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]],dtype="S"), shape=(allcBed.shape[0],),chunks = ((chunk_size,)))
+                h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]],dtype="S8"), shape=(allcBed.shape[0],),chunks = ((chunk_size,)))
     h5file.close()
 
 def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
@@ -134,13 +134,13 @@ def derive_common_positions(meths_list):
     for e_chr in chrs:
         # the function below is appending the list m.filter_pos_ix
         # So, make sure you have some place in the RAM.
-        log.info("reading in through the chromosome %s" % e_chr)
+        log.info("reading in through chromosome %s" % e_chr)
         derive_common_positions_echr(meths_list, e_chr)
     return(meths_list)
 
 def write_combined_h5_permeths(meths_list, output_file, read_threshold=5):
     ### Here the input is a list of meths object all the hdf5 files
-    meths_file_names = [ m.h5file.filename.encode('utf8') for m in meths_list ]
+    meths_file_names = np.array([ m.h5file.filename.encode('utf8') for m in meths_list ], dtype="string")
     len_filter = [ len(m.filter_pos_ix) for m in meths_list ]
     if not all(x == len_filter[0] for x in len_filter):
         die("please provide meths_list with corresponding positons in each")
@@ -151,13 +151,13 @@ def write_combined_h5_permeths(meths_list, output_file, read_threshold=5):
     outh5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     outh5file.create_dataset('num_lines', data=num_lines, shape=(1,),dtype='i4')
     outh5file.create_dataset('num_positions', data=num_positions, shape=(1,),dtype='i4')
-    outh5file.create_dataset('file_names', data=meths_file_names, shape=(num_lines,),dtype='S8')
+    outh5file.create_dataset('file_names', data=meths_file_names, shape=(num_lines,))
     ## Add chromosome and positions from the first meth files
-    outh5file.create_dataset('pos', compression="gzip", data=meths_list[0].get_positions(meths_list[0].filter_pos_ix), shape=(num_positions,), dtype='i4')
-    outh5file.create_dataset('chr', compression="gzip", data=meths_list[0].get_chrs_list(meths_list[0].filter_pos_ix), shape=(num_positions,), dtype='S8')
+    outh5file.create_dataset('pos', compression="lzf", data=meths_list[0].get_positions(meths_list[0].filter_pos_ix), shape=(num_positions,), dtype='i8')
+    outh5file.create_dataset('chr', compression="lzf", data=np.array(meths_list[0].get_chrs_list(meths_list[0].filter_pos_ix), dtype="S8"), shape=(num_positions,))
     ## Below the file is chunked the same way as a normal meths file. check this
-    outh5file.create_dataset('permeth', shape=(num_positions, num_lines), dtype='float', compression="gzip", chunks=((chunk_size, 1)))
-    outh5file.create_dataset('filter_pos_ix', shape=(num_positions, num_lines), dtype='int', compression="gzip", chunks=((chunk_size, 1)))
+    outh5file.create_dataset('permeth', shape=(num_positions, num_lines), dtype='float', compression="lzf", chunks=((chunk_size, 1)))
+    outh5file.create_dataset('filter_pos_ix', shape=(num_positions, num_lines), dtype='int', compression="lzf", chunks=((chunk_size, 1)))
     for i in range(len(meths_list)):
         outh5file['permeth'][:,i] = meths_list[i].get_permeths(meths_list[i].filter_pos_ix, read_threshold)
         outh5file['filter_pos_ix'][:,i] = meths_list[i].filter_pos_ix
