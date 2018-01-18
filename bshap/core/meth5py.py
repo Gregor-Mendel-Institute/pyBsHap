@@ -110,6 +110,8 @@ def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True, read_threshold
         meths_2_creq = meths_2_creq[get_methylated]
     return([meths_1_creq, meths_2_creq])
 
+# The below function is bit tricky, it gives the positions which are fixed in the files.
+# Problem: In 1001 data, there are only about 700000 cytosines which are fixed. Take care.
 def derive_common_positions_echr(meths_list, chrid):
     ## Caution: would probably need much memory if you give many files.
     # meth_list is a list of meths meth5py object read
@@ -138,7 +140,7 @@ def derive_common_positions(meths_list):
         derive_common_positions_echr(meths_list, e_chr)
     return(meths_list)
 
-def write_combined_h5_permeths(meths_list, output_file, read_threshold=5):
+def write_combined_h5_permeths(meths_list, output_file, read_threshold=0):
     ### Here the input is a list of meths object all the hdf5 files
     meths_file_names = np.array([ m.h5file.filename.encode('utf8') for m in meths_list ], dtype="string")
     len_filter = [ len(m.filter_pos_ix) for m in meths_list ]
