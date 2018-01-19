@@ -89,7 +89,7 @@ def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
 
 ### This function below is deprecated. migrate to functions below which are more versatile.
 # also permeth now returns -1 which are based on the read_threshold
-def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True, read_threshold = 5):
+def two_meths_commonpos_echr(meths_1, meths_2, chrid, methylated, read_threshold):
     req_chr_ind_1, chr_inds_1 = meths_1.get_chrinds(chrid)
     req_chr_ind_2, chr_inds_2 = meths_2.get_chrinds(chrid)
     ## Filter the positions based on read_threshold
@@ -108,6 +108,16 @@ def two_meths_commonpos(meths_1, meths_2, chrid, methylated=True, read_threshold
         get_methylated = np.where(np.sum((meths_1_meth, meths_2_meth), axis = 0) > 0)[0]
         meths_1_creq = meths_1_creq[get_methylated]
         meths_2_creq = meths_2_creq[get_methylated]
+    return([meths_1_creq, meths_2_creq])
+
+def two_meths_commonpos(meths_1, meths_2, methylated=True, read_threshold = 5):
+    meths_1_creq = np.zeros(0, dtype=int)
+    meths_2_creq = np.zeros(0, dtype=int)
+    for e_chr in chrs:
+        log.info("reading in through chromosome %s" % e_chr)
+        ind_1, ind_2 = two_meths_commonpos_echr(meths_1, meths_2, e_chr, methylated, read_threshold)
+        meths_1_creq = np.append(meths_1_creq, ind_1)
+        meths_2_creq = np.append(meths_2_creq, ind_2)
     return([meths_1_creq, meths_2_creq])
 
 # The below function is bit tricky, it gives the positions which are fixed in the files.
@@ -224,14 +234,24 @@ class HDF5MethTable(object):
         req_inds = x_chrpositions[req_chr_ind] + np.searchsorted(x_pos[req_chr_pos_inds[0]:req_chr_pos_inds[1]],[bin_bed[1],bin_bed[2]], side='right')
         return(range(req_inds[0],req_inds[1]))
 
-    def get_chrs_list(self, filter_pos_ix=None):
+    def get_chrs_list(self, filter_pos_ix):
+        #if filter_pos_ix is None:
+        #    return(np.array(self.h5file['chr']))
+        #elif type(filter_pos_ix) is np.ndarray:
+        #    rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+        #    return(self.h5file['chr'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+        #else:
+        #    return(self.h5file['chr'][filter_pos_ix])
+        ## I need to make same chr list for all files.
         if filter_pos_ix is None:
-            return(np.array(self.h5file['chr']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['chr'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['chr'][filter_pos_ix])
+            filter_pos_ix = np.arange(len(self.positions))
+        if len(filter_pos_ix) > 0:
+            chr_list = np.zeros(len(filter_pos_ix), dtype="S8")
+            filter_pos_ix = np.array(filter_pos_ix, dtype="int")
+            for echr in chrs:
+                chrinds = self.get_chrinds(echr)
+                chr_list[np.where((filter_pos_ix >= chrinds[1][0]) & (filter_pos_ix < chrinds[1][1]))[0]] = echr
+            return(chr_list)
 
     def get_positions(self, filter_pos_ix=None):
         if filter_pos_ix is None:
@@ -242,6 +262,15 @@ class HDF5MethTable(object):
             return(self.h5file['pos'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
             return(self.h5file['pos'][filter_pos_ix])
+
+    def get_bed_df(self, filter_pos_ix, full_bed=False):
+        req_pos = self.get_positions(filter_pos_ix)
+        if full_bed:
+            conname = self.get_mc_class(filter_pos_ix)
+            strand = self.get_strand(filter_pos_ix)
+            permeth = self.get_permeths(filter_pos_ix)
+            return(pd.DataFrame(np.column_stack((self.get_chrs_list(filter_pos_ix),req_pos, req_pos + 1, conname, permeth, strand)), columns=['chr', 'start', 'end', 'mc_class', 'permeth', 'strand']))
+        return(pd.DataFrame(np.column_stack((self.get_chrs_list(filter_pos_ix),req_pos, req_pos + 1)), columns=['chr', 'start', 'end']))
 
     def get_methylated(self, filter_pos_ix=None):
         if filter_pos_ix is None:

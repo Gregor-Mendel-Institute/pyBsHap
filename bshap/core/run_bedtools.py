@@ -30,16 +30,20 @@ def get_filter_bed_ix(bed_file, input_bed, just_names=True, araport11_file=None)
         raise NameError("file is not present, check file name")
     if just_names:
         req_bed_df = identify_positions_given_names(bed_file, araport11_file)
-        req_bed = pybed.BedTool.from_dataframe(req_bed_df.loc[:,[0,1,2]])
+        req_bed = pybed.BedTool.from_dataframe(req_bed_df.iloc[:,[0,1,2]])
     else:
         req_bed = pybed.BedTool(bed_file)
-    inBed = pybed.BedTool.from_dataframe(input_bed.loc[:,[0,1,2]])
+    inBed = pybed.BedTool.from_dataframe(input_bed.iloc[:,[0,1,2]])
     ## Just taking first three columns for bedtools
-    unionBed = inBed.intersect(req_bed, wa=True).to_dataframe() ## wa is to return the entire bed.
-    total_cols = np.array(input_bed.loc[:,0] + "," + input_bed.loc[:,1].map(str) + "," +  input_bed.loc[:,2].map(str), dtype="str")
+    union_pyBed = inBed.intersect(req_bed, wa=True)
+    if union_pyBed.count() == 0:   ## Return if there are no matching lines. 
+        return(None)
+    unionBed = union_pyBed.to_dataframe() ## wa is to return the entire bed.
+    total_cols = np.array(input_bed.iloc[:,0] + "," + input_bed.iloc[:,1].map(str) + "," +  input_bed.iloc[:,2].map(str), dtype="str")
     unionBed_cols = np.array(unionBed["chrom"] + "," + unionBed["start"].map(str) + "," +  unionBed["end"].map(str), dtype="str")
     return(np.where(np.in1d(total_cols, unionBed_cols))[0])
 
+## deprecated use the above function for all the chromosomes.
 def get_filter_pos_echr(bed_file, chrid, common_positions, just_names = True, araport11_file=None):
     filter_inds = []
     if just_names:

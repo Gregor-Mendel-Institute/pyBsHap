@@ -24,7 +24,7 @@ def meths_jointplot(x, y, reqcond, kde=True, hexplt=False):
     if not reqcond.has_key('ylab'):
             reqcond['ylab'] = ''
     if not reqcond.has_key('plt_limits'):
-        reqcond['plt_limits'] = (-0.1, 1.1)
+        reqcond['plt_limits'] = (-0.05, 1.05)
     import seaborn as sns
     sns.set(style="white", color_codes=True)
     if kde:
