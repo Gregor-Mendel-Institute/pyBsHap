@@ -205,14 +205,16 @@ clustering_distance_rows = "binary"
 ## Checking the read bshap for different tissues in root meristem. 
 ###
 init_cls = c("chr", "start", "end", "(0,0,0)","(1,0,0)","(0,1,0)", "(0,0,1)", "(1,1,0)", "(1,0,1)", "(0,1,1)", "(1,1,1)")
-root.data <- read.table("/projects/cegs/rahul/017.RootMeristem.Taiji2016/SraRunTable_rootTaiji.txt", sep = "\t", header = T, as.is = T)
-methreads.fol <- "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/003.selectedDMRs/"
+#root.data <- read.table("/projects/cegs/rahul/017.RootMeristem.Taiji2016/SraRunTable_rootTaiji.txt", sep = "\t", header = T, as.is = T)
+#methreads.fol <- "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/003.selectedDMRs/"
+root.data <- read.table("/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SraRunTable_zilbermann.txt", sep = "\t", header = T, as.is = T)
+methreads.fol <- "/projects/cegs/rahul/016.bshap/003.zilberman/002.dmrlists/"
 setwd(methreads.fol)
 
-req_list=read.table("dmr_chh_rms_results_collapsed.filtered.bed", as.is = T)
+req_list=read.table("dmr_chh_rms_results_collapsed.filtered.min50bp.bed", as.is = T)
 methreads.files <- list.files(methreads.fol, pattern = "[.]dmr.summary.txt")
 
-req_list = read.table("dmr_chh_rms_results_collapsed.random.bed", as.is = T)
+req_list = read.table("dmr_chh_rms_results_collapsed.filtered.random.bed", as.is = T)
 methreads.files <- list.files(methreads.fol, pattern = "[.]nodmr.summary.txt")
 
 
@@ -223,7 +225,8 @@ init_cls[required.frac.ind]
 required.frac.methreads <- c()
 for(mut in methreads.files){
   t.req.frac <- rep(NA, length(req_list))
-  t.id <- root.data$source_name_s[which(root.data$Run_s == unlist(strsplit(mut, "[.]"))[2])]
+  #t.id <- root.data$source_name_s[which(root.data$Run_s == unlist(strsplit(mut, "[.]"))[2])]
+  t.id <- root.data$tissue[which(root.data$Run == unlist(strsplit(mut, "[.]"))[2])]
   try(t.mut <- read.csv(file = file.path(methreads.fol, mut), header = F), silent = T)
   if(inherits(t.mut, 'try-error')) {next}
   req.sums <- rowSums(t.mut[,c(5,6,7,8,9,10,11)])
@@ -247,7 +250,7 @@ nrow(required.frac.methreads)
 head(required.frac.methreads)
 
 pdf("temp.nodmr.pdf")
-Heatmap(na.omit(required.frac.methreads), cluster_rows=T,cluster_columns =T, col=brewer.pal(11, "Spectral")[11:1], show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = paste("%", init_cls[required.frac.ind]), color_bar = "continuous"), clustering_method_columns = "ward.D")
+Heatmap(na.omit(required.frac.methreads[1:500,]), cluster_rows=T,cluster_columns =T, col=brewer.pal(11, "Spectral")[11:1], show_row_names = FALSE, show_heatmap_legend=T, heatmap_legend_param = list(title = paste("%", init_cls[required.frac.ind]), color_bar = "continuous"), clustering_method_columns = "ward.D")
 dev.off()
 
 

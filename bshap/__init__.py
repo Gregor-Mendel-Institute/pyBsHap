@@ -50,6 +50,15 @@ def get_options(program_license,program_version_message):
   methbam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   methbam.set_defaults(func=bshap_methbam)
 
+  mhlparser = subparsers.add_parser('getmhl', help="Get methylation haplotype load from the read data from the aligned bam files")
+  mhlparser.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
+  mhlparser.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
+  mhlparser.add_argument("-w", "--window_size", dest="window_size", help="window size", type = int, default=200)
+  mhlparser.add_argument("-s", "--strand", dest="strand", help="strand for the reads to get the MHL, maybe later I would print for the both", type = str, default='0')
+  mhlparser.add_argument("-o", "--output", dest="outFile", help="Output file")
+  mhlparser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+  mhlparser.set_defaults(func=bshap_mhlcalc)
+
   permeth_parser = subparsers.add_parser('methylation_percentage', help="Get methylation percentage on the given bin position.")
   permeth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files", required=True)
   permeth_parser.add_argument("-a", "--allc_path", dest="allc_path", help="Possible options: 1) Bash path, allc files from this path with sample ID are used. 2) hdf5, then the input file is a hdf5 formatted file. 3) bed, the input file is a bed file (also gzipped).", required=True)
@@ -121,6 +130,10 @@ def bshap_methbam(args):
         prebshap.getMethsRegions(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
     else:
         prebshap.getMethGenome(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
+
+def bshap_mhlcalc(args):
+    checkARGs(args)
+    prebshap.potato_mhl_calc(args)
 
 def bshap_modifybam(args):
     checkARGs(args)

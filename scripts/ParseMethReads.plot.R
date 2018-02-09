@@ -267,11 +267,11 @@ library("reshape")
 ref_seq <- "/vol/HOME/TAiR10_ARABIDOPSIS/TAIR10_wholeGenome.fasta"
 output_fol <- "~/Templates/"
 setwd(output_fol)
-Sys.setenv("PATH" = paste(Sys.getenv("PATH"), "~/py2_kernel/bin", sep = ":"))
+Sys.setenv("PATH" = paste(Sys.getenv("PATH"), "/home/GMI/rahul.pisupati/py2_kernel/bin:/home/GMI/rahul.pisupati/anaconda2/bin", sep = ":"))
 
-bs.bams <- c("/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534177/SRR534177_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam")
+bs.bams <- c("/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534177/SRR534177_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam", "/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516176/SRR516176_processed_reads_no_clonal.bam", "/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516180/SRR516180_processed_reads_no_clonal.bam")
 bs.bams <- as.list(bs.bams)
-names(bs.bams) <- c("WT, Stroud et. al. (Col-0)", "root tip (Col-0)", "columella root cap (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)")
+names(bs.bams) <- c("WT, Stroud et. al. (Col-0)", "root tip (Col-0)", "columella root cap (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)", "AT Sperm Columbia", "AT vegetative Columbia")
 
 ara.ind <- 161
 ara.ind <- 106
@@ -291,10 +291,13 @@ check.gr <- araport.gff[ara.ind]
 
 ## Checking DMRs between the root tissues.
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 423086, end = 424360), Name = "DMR1", type = "AT1TE01370")   ### TE1 in DMR
+## DMR for sperm and vegetative cell
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 431466	, end = 431983), Name = "DMR1", type = "AT1TE01370")   ### TE1 in DMR
+
 
 
 i = 4
-i = 5
+i = 11
 i = 7
 i = 9
 names(bs.bams)[i]

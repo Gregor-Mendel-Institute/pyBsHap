@@ -152,7 +152,7 @@ def filterRead(binread):
         filter_flag = True
     return(filter_flag)
 
-def getMethWind(inBam, tair10, required_bed, meths = ''):
+def getMethWind(inBam, tair10, required_bed, meths = '', strand = '0'):
     # required_bed = ['Chr1', start, end, binLen]
     binLen = required_bed[3]
     read_length_thres = binLen/2
@@ -180,11 +180,11 @@ def getMethWind(inBam, tair10, required_bed, meths = ''):
             intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
             intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
             rseq_record = getSeqRecord(binread, tair10, bin_bed, intersect_bed) ## No need to check for the overlap to print the alignment
-            if intersect_len > read_length_thres:
+            if intersect_len > read_length_thres:  ## To print the read only in one window.
                 permeths = getMethRead(tair10, binread) ## taking the first and last
                 binmeth.append([permeths[i] for i in [0,2,4,6]])
                 binmeth_whole.append(permeths)
-                if rflag[4] == '0':         ### Get only forward reads in the alignment
+                if rflag[4] == strand:         ### Get only forward reads in the alignment
                     bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
@@ -214,7 +214,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
             getMethWind(inBam, tair10, required_bed, meths)
             log.info("finished!")
             meths.close()
-            return(0)
+        return(0)
     else:
         required_region = interesting_region.split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
@@ -307,3 +307,100 @@ def clusteringReads(binmeth_whole, n_clusters=8):
         type_counts = [0,0,0,0,0,0,0,0]
         type_freqs = [0,0,0,0,0,0,0,0]
         return(type_counts,type_freqs)
+
+def getHighlighted_Read(binread):
+    strand = decodeFlag(binread.flag)[4]
+    re_string = getStrandContext(strand)
+    ## re_string = ['C', 'T', '.']
+    dot_rseq = binread.seq
+    refseq = binread.get_reference_sequence()  # Make sure MD tag is not changed.
+    for i,c in enumerate(refseq):
+        if c.upper() != re_string[0]:
+            dot_rseq = dot_rseq[:i] + re_string[2] + dot_rseq[i+1:]
+    return(dot_rseq)
+
+def getCs_bins_alignment(bins_alignment, strand):
+    # re_string = ['C','T','.']
+    re_string = getStrandContext(strand)
+    num_seq = len(bins_alignment)
+    refseq = bins_alignment[0]
+    cs_hap_bins = []
+    for seqind in range(1, num_seq):
+        eseq = str(bins_alignment[seqind].seq)
+        eseq = eseq.replace(re_string[2], "")
+        eseq = eseq.replace(re_string[0], "1")
+        eseq = eseq.replace(re_string[1], "0")
+        if len(eseq) > 0:
+            cs_hap_bins.append(eseq)
+    return(np.array(cs_hap_bins))
+
+def get_hap_comb_single(ecs_hap_bins):
+    ncols = len(ecs_hap_bins)
+    hap_comb_single = np.zeros(0, dtype=ecs_hap_bins.dtype)
+    for i in range(ncols):
+        for j in range(i, ncols):
+            hap_comb_single = np.append(hap_comb_single, ecs_hap_bins[i:j+1])
+    return(hap_comb_single)
+
+def get_hap_comb(cs_hap_bins):
+    hap_comb = np.zeros(0, dtype=cs_hap_bins.dtype)
+    for i in range(len(cs_hap_bins)):
+        hap_comb = np.append(hap_comb, get_hap_comb_single(cs_hap_bins[i]))
+    return(hap_comb)
+
+def calculate_mhl(bins_alignment, strand = '0'):
+    ## this is adapted from Guo et al. 2017 Figure 2.
+    cs_hap_bins = getCs_bins_alignment(bins_alignment, strand)
+    if len(cs_hap_bins) <= 1:
+        return((None, None))
+    nplen = np.vectorize(len)
+    hap_comb = get_hap_comb(cs_hap_bins)
+    mhl_value = np.zeros(0, dtype=float)
+    ncols = np.max(nplen(hap_comb))
+    for i in range(ncols):
+        input_tmp = np.where(nplen(hap_comb) == i + 1)[0]
+        nmeth = len( np.where( hap_comb[input_tmp] == '1' * (i + 1) )[0]  )
+        mhl_value = np.append(mhl_value, (i + 1) * nmeth / float(len(input_tmp)))
+    mhl_value = np.sum(mhl_value) / sum(range(ncols + 1))
+    return((mhl_value, len(cs_hap_bins)))
+
+def get_mhl_entire_bed(inBam, tair10, required_bed, outstat = '', strand = '0'):
+    window_size = required_bed[3]
+    read_length_thres = window_size/2
+    bin_start = required_bed[1] - (required_bed[1] % window_size)
+    estimated_bins = range(bin_start, required_bed[2], window_size)
+    progress_bins = 0
+    for bins in estimated_bins:        ## sliding windows with window_size
+        progress_bins += 1
+        dot_refseq = tair10[required_bed[0]][bins:bins + window_size].seq.encode('ascii')
+        dot_refseq = re.sub('A|T', '.', dot_refseq.upper())
+        bins_alignment = [SeqRecord(Seq(dot_refseq, generic_dna), id = required_bed[0] + ':' + str(bins) + '-' + str(bins + window_size))]
+        for binread in inBam.fetch(str(required_bed[0]), bins, bins + window_size):
+            rflag = decodeFlag(binread.flag)
+            if filterRead(binread): ## Filtering the dupplicated reads.
+                continue
+            if rflag[4] == strand:         ### Get only forward reads in the alignment
+                intersect_bed = [required_bed[0], binread.reference_start, binread.reference_end]
+                rseq_record = getSeqRecord(binread, tair10, intersect_bed, [intersect_bed[1], intersect_bed[2]])
+                bins_alignment.append(rseq_record)
+        mhl_value, no_cs_hap_bins = calculate_mhl(bins_alignment, strand)
+        outstat.write("%s,%s,%s,%s,%s\n" % (required_bed[0], str(bins + 1), str(bins + window_size), mhl_value, no_cs_hap_bins))
+        if progress_bins % 1000 == 0:
+            log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
+    return(0)
+
+def potato_mhl_calc(args):
+    log.info("loading the input files!")
+    inBam = pysam.AlignmentFile(args['inFile'], "rb")
+    (chrs, chrslen, binLen) = getChrs(inBam)
+    tair10 = Fasta(args['fastaFile'])
+    window_size = args['window_size']
+    log.info("finished!")
+    outstat = open(args['outFile'], 'w')
+    outstat.write("chr,start,end,mhl_stat,counts\n")
+    for cid, clen in zip(chrs, chrslen):     ## chromosome wise
+        log.info("analysing chromosome: %s" % cid)
+        required_bed = [cid, 0, clen, window_size]   ### 0 is to not print reads
+        get_mhl_entire_bed(inBam, tair10, required_bed, outstat, args['strand'])
+    log.info("finished!")
+    return(0)
