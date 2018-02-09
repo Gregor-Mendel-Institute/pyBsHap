@@ -308,17 +308,6 @@ def clusteringReads(binmeth_whole, n_clusters=8):
         type_freqs = [0,0,0,0,0,0,0,0]
         return(type_counts,type_freqs)
 
-def getHighlighted_Read(binread):
-    strand = decodeFlag(binread.flag)[4]
-    re_string = getStrandContext(strand)
-    ## re_string = ['C', 'T', '.']
-    dot_rseq = binread.seq
-    refseq = binread.get_reference_sequence()  # Make sure MD tag is not changed.
-    for i,c in enumerate(refseq):
-        if c.upper() != re_string[0]:
-            dot_rseq = dot_rseq[:i] + re_string[2] + dot_rseq[i+1:]
-    return(dot_rseq)
-
 def getCs_bins_alignment(bins_alignment, strand):
     # re_string = ['C','T','.']
     re_string = getStrandContext(strand)
