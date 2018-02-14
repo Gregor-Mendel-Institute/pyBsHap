@@ -149,6 +149,7 @@ meth.region.plot <- function(check.gr,input_h5file, title="", updown = 2000){
   input_bam <- h5read(input_h5file, "input_bam")
   binlen = h5read(input_h5file, "binlen")
   cex.plot <- 1.5
+  par(mar = c(5.5, 4.5, 3, 4) )
   barplot(chrom.mat, space = 0, col = meth.colors, border = "#bdbdbd", las = 2, xaxt = "n", cex.lab = cex.plot, cex.axis = cex.plot, ylab = "Number of reads", cex.main = cex.plot * 1.3, xlab = paste(elementMetadata(check.gr)$type, elementMetadata(check.gr)$Name, elementMetadata(check.gr)$locus_type, sep = ", "), sub = paste(title, ",", input_h5file))
   axis(1, at = 0, labels = paste("-", updown/1000, "Kb", sep = ""), lwd.ticks = 5, line =0.5)
   axis(1, at = as.integer(updown/binlen), labels = "start", lwd.ticks = 5, line =0.5)
@@ -269,9 +270,46 @@ output_fol <- "~/Templates/"
 setwd(output_fol)
 Sys.setenv("PATH" = paste(Sys.getenv("PATH"), "/home/GMI/rahul.pisupati/py2_kernel/bin:/home/GMI/rahul.pisupati/anaconda2/bin", sep = ":"))
 
-bs.bams <- c("/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534177/SRR534177_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311825_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311822_processed_reads_no_clonal.bam", "/projects/cegs/rahul/016.bshap/004.taiji.rootmeristem/SRR3311821_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534239/SRR534239_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534182/SRR534182_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534240/SRR534240_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR534215/SRR534215_processed_reads_no_clonal.bam", "/projects/cegs/rahul/013.alignMutants_GSE39901/01.methylpy/SRR869314/SRR869314_processed_reads_no_clonal.bam", "/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516176/SRR516176_processed_reads_no_clonal.bam", "/projects/cegs/rahul/006.SpermAndVegetativeCells/004.zilbermann/SRR516180/SRR516180_processed_reads_no_clonal.bam")
-bs.bams <- as.list(bs.bams)
-names(bs.bams) <- c("WT, Stroud et. al. (Col-0)", "root tip (Col-0)", "columella root cap (Col-0)", "stele cells (Col-0)", "met1 (Col-0)", "nrpe1 (Col-0)", "met1 cmt3 (Col-0)", "ddm1 (Col-0)", "cmt2 (Col-0)", "AT Sperm Columbia", "AT vegetative Columbia")
+## Random files
+
+sra_names = c("WT col-0")
+sra_files = c("/projects/cegs/rahul/008.Col-0.Bis/03.sra.SRR501624/SRR501624_processed_reads_no_clonal.bam")
+
+i = 1
+
+#### Straud mutants, bam files
+data_dir = "/projects/cegs/rahul/013.alignMutants/01.MutantsStraud.GSE39901/002.methylpy"
+sra_table = read.csv("/projects/cegs/rahul/013.alignMutants/01.MutantsStraud.GSE39901/SraRunTable_StroudMutants.txt", as.is = T, sep = "\t")
+sra_names = sra_table[,c('genotype_s')] 
+sra_files = as.character()
+for (ef in sra_table[,c('Run_s')]) { sra_files = c(sra_files, file.path(data_dir, ef, paste(ef, "_processed_reads_no_clonal.bam", sep = "")))  }
+
+fix(sra_table)
+i = 1
+i = 59 ## Met1
+i = 30 ## drm1/2
+i = 32 ## drm1/2 and cmt3
+i = 45 ## CMT2
+i = 50 ## nrpe1
+i = 17 ## CMT3
+i = 89 ## vim123
+
+#### Root tissues, bam files
+data_dir = "/projects/cegs/rahul/017.RootMeristem.Taiji2016/002.methylpy/"
+sra_table = read.csv("/projects/cegs/rahul/017.RootMeristem.Taiji2016/SraRunTable_rootTaiji.txt", as.is = T, sep = "\t")
+sra_names = sra_table[,c('source_name_s')] 
+sra_files = as.character()
+for (ef in sra_table[,c('Run_s')]) { sra_files = c(sra_files, paste(data_dir, "/", ef, "/", ef, "_processed_reads_no_clonal.bam", sep = "") )  }
+
+i = 8
+i = 6 ## CRC
+i = 1 # Epidermis
+i = 5 # Stele
+
+### ___________________________________________
+
+sra_names[i]
+input_file <- sra_files[i]
 
 ara.ind <- 161
 ara.ind <- 106
@@ -279,10 +317,7 @@ ara.ind <- 107
 ara.ind <- 14468  ### ROS1 gene
 ara.ind <- 17145  ## DML-2 protein gene
 ara.ind <- which(elementMetadata(araport.gff)$ID == "AT1G65960")
-
-
 ara.ind <- which(as.character(seqnames(araport.gff)) == "ChrC")[4]
-
 
 check.gr <- araport.gff[ara.ind]
 #check.gr <- subset(araport.gff, ID == "AT4G37650")
@@ -292,16 +327,12 @@ check.gr <- araport.gff[ara.ind]
 ## Checking DMRs between the root tissues.
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 423086, end = 424360), Name = "DMR1", type = "AT1TE01370")   ### TE1 in DMR
 ## DMR for sperm and vegetative cell
-check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 431466	, end = 431983), Name = "DMR1", type = "AT1TE01370")   ### TE1 in DMR
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 431466	, end = 431983), Name = "DMR1", type = "AT1TE01395")   ### TE1 in DMR
 
 
+### CMT2 TE
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 9642845, end = 9643142), Name = "DMR1", type = "AT1TE31080")   ### CMT2 TE
 
-i = 4
-i = 11
-i = 7
-i = 9
-names(bs.bams)[i]
-input_file <- bs.bams[[i]]
 
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
 updown <- 3000
@@ -313,13 +344,28 @@ system(pybshap.command)
 
 input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 
-meth.region.plot(check.gr,input_h5file, updown = updown, title = names(bs.bams)[i])
-meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = names(bs.bams)[i], updown = updown, max_reads = 40)
+#meth.region.plot(check.gr,input_h5file, updown = updown, title = sra_names[i])
+#meth.region.plot.contexts(check.gr = check.gr, input_h5file = input_h5file, mtitle = sra_names[i], updown = updown, max_reads = 40)
+#dev.off()
+
+#getPCAmeths(check.gr, input_h5file, main=sra_names[i], updown = updown)
+
+#getWMA_default_plot(check.gr = check.gr, input_h5file = input_h5file, updown = updown, meths_fol = dirname(as.character(sra_files[i])), input_id = output_id, title = sra_names[i], getMethInd = 1, binlen = 500)
+
+
+
+mhl.command <- paste("bshap getmhl -i", input_file, "-r", ref_seq, "-x",  check_pos)
+mhl_regions = system(mhl.command, intern = T)
+
 dev.off()
+meth.region.plot(check.gr,input_h5file, updown = updown, title = sra_names[i])
+par(resetPar())
+par(mar = c(5.5, 4.5, 10, 4) )
+par(new=T)
+plot(seq( length(mhl_regions) -1), tail(as.numeric(sapply(mhl_regions, function(x){ unlist(strsplit(x, ","))[4]   } )), -1) , axes = F, ylim = c(0, 1), xlab = "", ylab = "", pch = 19)
+axis(4)
+mtext("MHL", line = 2, 4)
 
-getPCAmeths(check.gr, input_h5file, main=names(bs.bams)[i], updown = updown)
-
-getWMA_default_plot(check.gr = check.gr, input_h5file = input_h5file, updown = updown, meths_fol = dirname(as.character(bs.bams[i])), input_id = output_id, title = names(bs.bams)[i], getMethInd = 1, binlen = 500)
 
 
 ### looping
@@ -372,8 +418,6 @@ for (i in seq(length(bs.bams))){
   #meth.region.plot(check.gr,input_h5file, title=names(bs.bams)[i], updown = 2000)
 }
 dev.off()
-library("entropy")
-KL.plugin(c(0.1,0.2,0.4,0.3), c(0.2,0.2,0.3,0.3))
 
 
 ##### ============================================
