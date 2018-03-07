@@ -282,6 +282,7 @@ data_dir = "/projects/cegs/rahul/013.alignMutants/01.MutantsStraud.GSE39901/002.
 sra_table = read.csv("/projects/cegs/rahul/013.alignMutants/01.MutantsStraud.GSE39901/SraRunTable_StroudMutants.txt", as.is = T, sep = "\t")
 sra_names = sra_table[,c('genotype_s')] 
 sra_files = as.character()
+h5files = as.character()
 for (ef in sra_table[,c('Run_s')]) { sra_files = c(sra_files, file.path(data_dir, ef, paste(ef, "_processed_reads_no_clonal.bam", sep = "")))  }
 
 fix(sra_table)
@@ -307,10 +308,7 @@ i = 1 # Epidermis
 i = 5 # Stele
 
 ### ___________________________________________
-
-sra_names[i]
-input_file <- sra_files[i]
-
+### Choose a region in the genome
 ara.ind <- 161
 ara.ind <- 106
 ara.ind <- 107
@@ -322,17 +320,21 @@ ara.ind <- which(as.character(seqnames(araport.gff)) == "ChrC")[4]
 check.gr <- araport.gff[ara.ind]
 #check.gr <- subset(araport.gff, ID == "AT4G37650")
 
-#check.gr <- GRanges(seqnames = c("ChrC"), ranges = IRanges(start = 1, end = 154478), Name = "ChrC", type = "whole chroloplast genome")   ### Entire ChrC
+check.gr <- GRanges(seqnames = c("ChrC"), ranges = IRanges(start = 15000, end = 20000), Name = "ChrC", type = "chroloplast genome:5kb")   ### Entire ChrC
 
 ## Checking DMRs between the root tissues.
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 423086, end = 424360), Name = "DMR1", type = "AT1TE01370")   ### TE1 in DMR
 ## DMR for sperm and vegetative cell
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 431466	, end = 431983), Name = "DMR1", type = "AT1TE01395")   ### TE1 in DMR
-
-
+## RdDM TE
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 2473099	, end = 2473306), Name = "DMR1", type = "AT1TE08055")   ### TE1 in DMR
 ### CMT2 TE
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 9642845, end = 9643142), Name = "DMR1", type = "AT1TE31080")   ### CMT2 TE
-
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 13324758, end = 13329639), Name = "DMR1", type = "AT1TE43585")   ### CMT2 TE
+### ___________________________________________
+## Run all the commands below
+sra_names[i]
+input_file <- sra_files[i]
 
 output_id <- strsplit(basename(input_file), "_")[[1]][1]
 updown <- 3000
@@ -357,7 +359,7 @@ input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 mhl.command <- paste("bshap getmhl -i", input_file, "-r", ref_seq, "-x",  check_pos)
 mhl_regions = system(mhl.command, intern = T)
 
-dev.off()
+#dev.off()
 meth.region.plot(check.gr,input_h5file, updown = updown, title = sra_names[i])
 par(resetPar())
 par(mar = c(5.5, 4.5, 10, 4) )

@@ -15,6 +15,7 @@ from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
 from sklearn.cluster import KMeans
 import json
+from . import meth5py
 
 log = logging.getLogger(__name__)
 
@@ -308,6 +309,12 @@ def clusteringReads(binmeth_whole, n_clusters=8):
         type_freqs = [0,0,0,0,0,0,0,0]
         return(type_counts,type_freqs)
 
+#### ==========================================
+##      MHL calculation from here
+##  adapted from Guo et al, 2017
+#### ==========================================
+
+
 def getCs_bins_alignment(bins_alignment, strand):
     # re_string = ['C','T','.']
     re_string = getStrandContext(strand)
@@ -361,7 +368,7 @@ def calculate_mhl(cs_hap_bins):
     mhl_value = np.sum(mhl_value) / sum(range(ncols + 1))
     return((mhl_value, len(cs_hap_bins), ncols))
 
-def get_mhl_entire_bed(inBam, tair10, required_bed, outstat = '', strand = '0'):
+def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand = '0'):
     window_size = required_bed[3]
     read_length_thres = window_size/2
     bin_start = required_bed[1] - (required_bed[1] % window_size)
@@ -370,6 +377,7 @@ def get_mhl_entire_bed(inBam, tair10, required_bed, outstat = '', strand = '0'):
     for bins in estimated_bins:        ## sliding windows with window_size
         progress_bins += 1
         cs_hap_bins = np.zeros(0, dtype="string")
+        bin_bed = [required_bed[0], bins, bins + window_size]
         for binread in inBam.fetch(str(required_bed[0]), bins, bins + window_size):
             rflag = decodeFlag(binread.flag)
             if filterRead(binread): ## Filtering the dupplicated reads.
@@ -381,6 +389,7 @@ def get_mhl_entire_bed(inBam, tair10, required_bed, outstat = '', strand = '0'):
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
+        wma_win = meth5py.methylation_average_required_bed(meths, bin_bed, '', 4)
         if outstat == '':
             print("%s,%s,%s,%s,%s,%s" % (required_bed[0], str(bins + 1), str(bins + window_size),mhl_value, no_cs_hap_bins,ncols))
         else:
@@ -392,6 +401,7 @@ def get_mhl_entire_bed(inBam, tair10, required_bed, outstat = '', strand = '0'):
 def potato_mhl_calc(args):
     log.info("loading the input files!")
     inBam = pysam.AlignmentFile(args['inFile'], "rb")
+    meths = meth5py.load_hdf5_methylation_file(args['inhdf5'])
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(args['fastaFile'])
     #window_size = args['window_size']
@@ -407,12 +417,12 @@ def potato_mhl_calc(args):
         required_region = args['reqRegion'].split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), window_size, 1]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        get_mhl_entire_bed(inBam, tair10, required_bed, outstat, args['strand'])
+        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat, args['strand'])
         log.info("finished!")
         return(0)
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         required_bed = [cid, 0, clen, window_size]   ### 0 is to not print reads
-        get_mhl_entire_bed(inBam, tair10, required_bed, outstat, args['strand'])
+        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat, args['strand'])
     log.info("finished!")
     return(0)

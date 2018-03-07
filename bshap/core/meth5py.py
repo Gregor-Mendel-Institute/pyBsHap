@@ -31,20 +31,23 @@ def get_chrs(allc_id, allc_path):
 
 def read_allc_pandas_table(allc_file):
     sniffer = csv.Sniffer()
-    allc = open(allc_file, 'rb')
-    ifheader = sniffer.has_header(allc.read(4096))
-    if ifheader:
-        bsbed = pd.read_table(allc_file, header = 0)
-        return(bsbed)
+    if os.path.splitext(allc_file)[1] == '.gz':  ### For the new allc files
+        bsbed = pd.read_table(allc_file, header = None, compression='gzip')
     else:
-        bsbed = pd.read_table(allc_file, header = None)
+        allc = open(allc_file, 'rb')
+        ifheader = sniffer.has_header(allc.read(4096))
+        if ifheader:
+            bsbed = pd.read_table(allc_file, header = 0)
+            return(bsbed)
+        else:
+            bsbed = pd.read_table(allc_file, header = None)
     if len(bsbed.columns.values) == 7:
         bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
     else:
         raise(NotImplementedError)
     return(bsbed)
 
-def generage_h5file_from_allc(allc_id, allc_path, outFile):
+def read_allc_files_chrwise(allc_id, allc_path):
     allcBed = []
     chrpositions = []
     tlen = 0
@@ -59,6 +62,31 @@ def generage_h5file_from_allc(allc_id, allc_path, outFile):
             allcBed = pd.concat([allcBed, bsbed])
         except TypeError:
             allcBed = bsbed
+    return((allcBed, chrpositions))
+
+def parseChrName(targetCHR): ### Taken from SNPmatch
+    snpCHROM = np.char.replace(np.core.defchararray.lower(np.array(targetCHR)), "chr", "")
+    snpsREQ = np.where(np.char.isdigit(snpCHROM))[0]   ## Filtering positions from mitochondrial and chloroplast
+    snpCHR = targetCHR[snpsREQ]
+    return (snpCHR, snpsREQ)
+
+def generage_h5file_from_allc(allc_id, allc_path, outFile):
+    if allc_path == 'new':
+        allcBed = read_allc_pandas_table(allc_id)
+        log.info("sorting the bed file!")
+        allcBed = allcBed.sort_values(by=[allcBed.columns[0],allcBed.columns[1]])
+        log.info("done!")
+        filter_chrs = parseChrName(np.array(allcBed.iloc[:,0], dtype="string"))
+        filter_chrs_counts = np.unique(filter_chrs[0], return_counts = True)
+        chrpositions = np.zeros(1, dtype="int")
+        for ec in chrs:
+            ec_ind = np.where(filter_chrs_counts[0] == ec)[0]
+            if len(ec_ind) == 1:
+                chrpositions = np.append(chrpositions, np.sum(chrpositions) + filter_chrs_counts[1][ec_ind])
+            else:
+                chrpositions = np.append(chrpositions, 0)
+    else:
+        (allcBed, chrpositions) = read_allc_files_chrwise(allc_id, allc_path)
     log.info("writing a hdf5 file")
     generate_H5File(allcBed,chrpositions, outFile)
 
@@ -89,7 +117,7 @@ def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
 
 ### This function below is deprecated. migrate to functions below which are more versatile.
 # also permeth now returns -1 which are based on the read_threshold
-def two_meths_commonpos_echr(meths_1, meths_2, chrid, methylated, read_threshold):
+def two_meths_commonpos_echr(meths_1, meths_2, chrid, methylated=True, read_threshold=5):
     req_chr_ind_1, chr_inds_1 = meths_1.get_chrinds(chrid)
     req_chr_ind_2, chr_inds_2 = meths_2.get_chrinds(chrid)
     ## Filter the positions based on read_threshold
@@ -438,6 +466,8 @@ def MethylationSummaryStats(meths, filter_pos_ix, category, req_context = None):
         return(float(meths_len)/len(filter_pos_ix))
     elif category == 3: ## absolute means
         return(np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)))
+    elif category == 4:  ### weighted mean but without making correction for converion.
+        return(np.divide(float(np.sum(mc_count)), np.sum(mc_total)))
     else:
         raise(NotImplementedError)
 
@@ -445,7 +475,9 @@ def methylation_average_required_bed(meths, required_bed, outmeths_avg, category
     ### required_bed = ["Chr1", 1, 1000]
     filter_pos_ix = meths.get_filter_inds(required_bed)
     req_meth_avg = MethylationSummaryStats(meths, filter_pos_ix, category)
-    if outmeths_avg is not None:
+    if outmeths_avg == '':
+        return(req_meth_avg)
+    elif outmeths_avg is not None:
         outmeths_avg.write("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1], required_bed[2], req_meth_avg))
     else:
         print("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1] + 1, required_bed[2], req_meth_avg))
@@ -462,7 +494,10 @@ def potatoskin_methylation_averages(args):
         meths = load_hdf5_methylation_file(args['inFile'])
         log.info("done!")
     else:
-        outhdf5 = args['allc_path'] + "allc_" + args['inFile'] + ".hdf5"
+        if args['allc_path'] == 'new':
+            outhdf5 = os.path.splitext(os.path.splitext(args['inFile'])[0])[0] + ".hdf5"
+        else:
+            outhdf5 = args['allc_path'] + "allc_" + args['inFile'] + ".hdf5"
         if os.path.isfile(outhdf5):
             log.info("loading the hdf5 file %s!" % outhdf5)
         else:
