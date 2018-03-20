@@ -283,7 +283,11 @@ sra_table = read.csv("/projects/cegs/rahul/013.alignMutants/01.MutantsStraud.GSE
 sra_names = sra_table[,c('genotype_s')] 
 sra_files = as.character()
 h5files = as.character()
-for (ef in sra_table[,c('Run_s')]) { sra_files = c(sra_files, file.path(data_dir, ef, paste(ef, "_processed_reads_no_clonal.bam", sep = "")))  }
+for (ef in sra_table[,c('Run_s')]) { 
+  sra_files = c(sra_files, file.path(data_dir, ef, paste(ef, "_processed_reads_no_clonal.bam", sep = "")))  
+  h5files = c(h5files, file.path(data_dir, ef, paste("allc_", ef, ".hdf5", sep = ""))   )
+}
+
 
 fix(sra_table)
 i = 1
@@ -356,7 +360,7 @@ input_h5file <- paste("meths.", output_id,  ".hdf5", sep = "")
 
 
 
-mhl.command <- paste("bshap getmhl -i", input_file, "-r", ref_seq, "-x",  check_pos)
+mhl.command <- paste("bshap getmhl -i", input_file, "-r", ref_seq, "-x",  check_pos, "-d", h5files[i])
 mhl_regions = system(mhl.command, intern = T)
 
 #dev.off()

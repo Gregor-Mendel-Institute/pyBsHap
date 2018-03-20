@@ -34,13 +34,17 @@ def BinomTest(per_n, n, p, alternative="greater"):
         tpVal = st.binom_test(per_n, n, p, alternative = alternative)
     return tpVal
 
-def getConvRate(bsCHROM, bsCONTEXT, bsMethPer, bstC, chrs = "ChrC"):
+def getConvRate(bsCHROM, bs_mc_count, bs_mc_total, bsCONTEXT=None, chrs = "ChrC"):
   chrInd = np.where(bsCHROM == chrs)[0]
-  contInd = chrInd[np.where((bsCONTEXT[chrInd] == 'CG') | (bsCONTEXT[chrInd] == 'CHG') | (bsCONTEXT[chrInd] == 'CHH'))[0]]
-  chrMethPer = bsMethPer[contInd]
-  chrDepth = bstC[contInd]
-  conv_rate = np.nansum(np.multiply(chrMethPer, chrDepth))/np.nansum(chrDepth)
-  return conv_rate
+  if bsCONTEXT is not None:
+    contInd = chrInd[np.where((bsCONTEXT[chrInd] == 'CG') | (bsCONTEXT[chrInd] == 'CHG') | (bsCONTEXT[chrInd] == 'CHH'))[0]]
+    chrMethPer = bs_mc_count[contInd]
+    chrDepth = bs_mc_total[contInd]
+  else:
+    chrMethPer = bs_mc_count[chrInd]
+    chrDepth = bs_mc_total[chrInd]
+  nonconv_rate = np.nansum(chrMethPer)/float(np.nansum(chrDepth))
+  return( nonconv_rate)
 
 def callMPs(bsMethPer, bstC, error_rate, alternative="greater", window=300000):
   bsPval = np.zeros(0,dtype=float)
@@ -51,6 +55,18 @@ def callMPs(bsMethPer, bstC, error_rate, alternative="greater", window=300000):
     bsPval = np.append(bsPval, pVal)
     log.info("progress: %s positions" % (i + window))
   return bsPval
+
+def callMPs_allcbed(allcBed, alternative="greater", window=300000):
+  bsPval = np.zeros(0,dtype=float)
+  npBinomTest = np.vectorize(BinomTest)
+  log.info("calculating converion rate")
+  error_rate = getConvRate(np.array(allcBed['chr']), np.array(allcBed["mc_count"]), np.array(allcBed["total"]))
+  log.info("running binomial test for indiviadual sites!")
+  for i in range(0, allcBed.shape[0], window):
+    pVal = npBinomTest(np.array(allcBed["mc_count"][i:i+window]),np.array(allcBed["total"][i:i+window]), error_rate, alternative=alternative)
+    bsPval = np.append(bsPval, pVal)
+    log.info("progress: %s positions" % (i + window))
+  return(bsPval)
 
 def getconv_rate_allc(allcFile):
     ## Give allcfile for the Chromosome of unMethylatedControl
@@ -115,6 +131,7 @@ def writeBED(bsCHROM, bsPOS, bsCONTEXT, bstC, bsMethPer, bsPval, bsSTRAND, outBE
 
 def getMPsfromVCF(args):
   (bVCF, bvcfD) = readVCF(args['inVCF'])
+  die("function have been changed")
   error_rate = getConvRate(bvcf.CHROM, bvcf.CX, bvcfD.BT[:,0], bvcfD.CV[:,0], chrs = "ChrC")
   log.info("Conversion rate: %s", 100 - error_rate * 100)
   ChrsNums = np.array(("Chr1","Chr2","Chr3","Chr4","Chr5"))

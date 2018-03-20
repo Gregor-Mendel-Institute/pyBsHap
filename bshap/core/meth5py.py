@@ -70,21 +70,24 @@ def parseChrName(targetCHR): ### Taken from SNPmatch
     snpCHR = targetCHR[snpsREQ]
     return (snpCHR, snpsREQ)
 
-def generage_h5file_from_allc(allc_id, allc_path, outFile):
+def generage_h5file_from_allc(allc_id, allc_path, outFile, perform_pval_tests=True, pval_thres=0.01):
     if allc_path == 'new':
+        log.info("reading the allc file")
         allcBed = read_allc_pandas_table(allc_id)
-        log.info("sorting the bed file!")
-        allcBed = allcBed.sort_values(by=[allcBed.columns[0],allcBed.columns[1]])
         log.info("done!")
-        filter_chrs = parseChrName(np.array(allcBed.iloc[:,0], dtype="string"))
-        filter_chrs_counts = np.unique(filter_chrs[0], return_counts = True)
+        if perform_pval_tests:
+            from . import bsseq
+            pval = bsseq.callMPs_allcbed(allcBed)
+            allcBed.iloc[np.where(pval > pval_thres)[0],6] = 0   ### changing the methylated column to 0 for non methylated sites.
+        allcBed_new = pd.DataFrame(columns = allcBed.columns)
         chrpositions = np.zeros(1, dtype="int")
+        log.info("sorting the bed file!")
         for ec in chrs:
-            ec_ind = np.where(filter_chrs_counts[0] == ec)[0]
-            if len(ec_ind) == 1:
-                chrpositions = np.append(chrpositions, np.sum(chrpositions) + filter_chrs_counts[1][ec_ind])
-            else:
-                chrpositions = np.append(chrpositions, 0)
+            allcBed_echr = allcBed.iloc[np.where(allcBed.iloc[:,0] == ec)[0], :]
+            allcBed_new = allcBed_new.append(allcBed_echr.iloc[np.argsort(np.array(allcBed_echr.iloc[:,1], dtype=int)), :] , ignore_index=True)
+            chrpositions = np.append(chrpositions, chrpositions[-1] + allcBed_echr.shape[0])
+        log.info("done!")
+        allcBed = allcBed_new
     else:
         (allcBed, chrpositions) = read_allc_files_chrwise(allc_id, allc_path)
     log.info("writing a hdf5 file")
@@ -96,14 +99,11 @@ def generate_H5File(allcBed, chrpositions, outFile):
     num_lines = len(chrpositions)
     h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
-    h5file.create_dataset('pos', compression="gzip", data=np.array(allcBed['pos']), shape=(allcBed.shape[0],), dtype='i4')
-    allc_columns = ['chr','strand','mc_class','mc_count','total','methylated']
+    allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total', 'methylated']
+    allc_dtypes = ['S8', 'int', 'S4', 'S8', 'int', 'int', 'int8']
     ## Going through all the columns
-    for cols in allc_columns:
-        try:
-            h5file.create_dataset(cols, compression="gzip", data=np.array(allcBed[cols]), shape=(allcBed.shape[0],), chunks = ((chunk_size,)))
-        except TypeError:
-            h5file.create_dataset(cols, compression="gzip", data=np.array(allcBed[cols],dtype="S8"), shape=(allcBed.shape[0],), chunks = ((chunk_size,)))
+    for cols, coltype in zip(allc_columns, allc_dtypes):
+        h5file.create_dataset(cols, compression="gzip", data=np.array(allcBed[cols],dtype=coltype), shape=(allcBed.shape[0],), chunks = ((chunk_size,)))
     if allcBed.shape[1] > 7:
         for i in range(7,allcBed.shape[1]):
             try:
