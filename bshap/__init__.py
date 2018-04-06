@@ -77,8 +77,7 @@ def get_options(program_license,program_version_message):
   modifybam = subparsers.add_parser('modifymdtag', help="Modify MD tag on BAM files to get default coloring in jbrowse")
   modifybam.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   modifybam.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
-  modifybam.add_argument("-s", "--specificRegion", dest="reqRegion", help="region to be checked, Ex. Chr1,1,100 --- an aln file is generated given this", default = '0,0,0')
-  modifybam.add_argument("-o", "--output", dest="outFile", help="Output file with the methylation across windows")
+  modifybam.add_argument("-o", "--output", dest="outFile", help="Output bam file with modified md tag")
   modifybam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
   modifybam.set_defaults(func=bshap_modifybam)
 
@@ -139,7 +138,7 @@ def bshap_mhlcalc(args):
 
 def bshap_modifybam(args):
     checkARGs(args)
-    bamEdit.writeBam(args['inFile'], args['fastaFile'], args['outFile'], args['reqRegion'])
+    bamEdit.potatoskin_modify_mdtag_bam(args['inFile'], args['fastaFile'], args['outFile'])
 
 def callMPsfromVCF(args):
   if not args['inFile']:

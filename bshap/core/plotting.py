@@ -46,6 +46,9 @@ def meths_jointplot(x, y, reqcond, kde=True, hexplt=False):
             else:
                 p = sns.jointplot(x = x, y = y, kind = "scatter", alpha = 0.1, color=reqcond['color'])
     p.set_axis_labels(reqcond['xlab'], reqcond['ylab'])
+    #from sklearn.metrics import mean_squared_error
+    #from math import sqrt
+    #p = p.annotate(mean_squared_error, template="MSE: {val:.4f}; npts: %s" % len(p.x), fontsize=12)
     p = p.annotate(stats.pearsonr, template="{stat}: {val:.2f}; npts: %s" % len(p.x), fontsize=12)
     p.ax_joint.plot(reqcond['plt_limits'], reqcond['plt_limits'], ':k')
     p.ax_marg_x.axis([reqcond['plt_limits'][0], reqcond['plt_limits'][1], 0, len(p.x)/5])

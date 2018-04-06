@@ -64,18 +64,12 @@ def read_allc_files_chrwise(allc_id, allc_path):
             allcBed = bsbed
     return((allcBed, chrpositions))
 
-def parseChrName(targetCHR): ### Taken from SNPmatch
-    snpCHROM = np.char.replace(np.core.defchararray.lower(np.array(targetCHR)), "chr", "")
-    snpsREQ = np.where(np.char.isdigit(snpCHROM))[0]   ## Filtering positions from mitochondrial and chloroplast
-    snpCHR = targetCHR[snpsREQ]
-    return (snpCHR, snpsREQ)
-
-def generage_h5file_from_allc(allc_id, allc_path, outFile, perform_pval_tests=True, pval_thres=0.01):
+def generage_h5file_from_allc(allc_id, allc_path, outFile, pval_thres=0.01):
     if allc_path == 'new':
         log.info("reading the allc file")
         allcBed = read_allc_pandas_table(allc_id)
         log.info("done!")
-        if perform_pval_tests:
+        if len(np.unique(allcBed.iloc[0:100000,6])) == 1: ### Check if the top one million is all either 1's or 0's
             from . import bsseq
             pval = bsseq.callMPs_allcbed(allcBed)
             allcBed.iloc[np.where(pval > pval_thres)[0],6] = 0   ### changing the methylated column to 0 for non methylated sites.

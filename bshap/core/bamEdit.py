@@ -52,33 +52,22 @@ def modifyMDtag(inBam, tair10, binread, outBam):
     oread.tags = tags
     outBam.write(oread)
 
-def writeBam(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
+def potatoskin_modify_mdtag_bam(bamFile, fastaFile, outFile):
     # Out Bam file
     log.info("loading the input files!")
     inBam = pysam.AlignmentFile(bamFile, "rb")
     (chrs, chrslen, binLen) = prebshap.getChrs(inBam)
     tair10 = Fasta(fastaFile)
     log.info("finished!")
-    outBam_file = outFile + '_processed_reads_no_clonal_modifiedMD_filtered.bam'
-    log.info("writing file into AlignmentFile, %s!" % outBam_file)
-    outBam = pysam.AlignmentFile(outBam_file, "wb", header = inBam.header)
-    if interesting_region == '0,0,0':
-        for cid, clen in zip(chrs, chrslen):     ## chromosome wise
-            log.info("analysing chromosome: %s" % cid)
-            for binread in inBam.fetch(str(cid), 0, clen):
-                if prebshap.filterRead(binread):
-                    continue
-                modifyMDtag(inBam, tair10, binread, outBam)
-            log.info("finished!")
-    else:
-        required_region = interesting_region.split(',')
-        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), binLen, 1]
-        log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        for binread in inBam.fetch(required_bed[0], required_bed[1], required_bed[2]):
+    log.info("writing file into AlignmentFile, %s!" % outFile)
+    outBam = pysam.AlignmentFile(outFile, "wb", header = inBam.header)
+    for cid, clen in zip(chrs, chrslen):     ## chromosome wise
+        log.info("analysing chromosome: %s" % cid)
+        for binread in inBam.fetch(str(cid), 0, clen):
             if prebshap.filterRead(binread):
                 continue
             modifyMDtag(inBam, tair10, binread, outBam)
         log.info("finished!")
     log.info("indexing output bam file!")
-    Popen(shlex.split("samtools index " + outBam_file), stdout=PIPE)
+    Popen(shlex.split("samtools index " + outFile), stdout=PIPE)
     log.info("finished!")
