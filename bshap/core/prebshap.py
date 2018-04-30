@@ -364,9 +364,10 @@ def calculate_mhl(cs_hap_bins):
     for i in range(ncols):
         input_tmp = np.where(nplen(hap_comb) == i + 1)[0]
         nmeth = len( np.where( hap_comb[input_tmp] == '1' * (i + 1) )[0]  )
-        mhl_value = np.append(mhl_value, (i + 1) * nmeth / float(len(input_tmp)))
-    mhl_value = np.sum(mhl_value) / sum(range(ncols + 1))
-    return((mhl_value, len(cs_hap_bins), ncols))
+        if len(input_tmp) >= len(cs_hap_bins)/1.3:
+            mhl_value = np.append(mhl_value, (i + 1) * nmeth / float(len(input_tmp)))
+    mhl_value_final = np.sum(mhl_value) / sum(range(ncols + 1))
+    return((mhl_value_final, len(cs_hap_bins), ncols))
 
 def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand = '0'):
     window_size = required_bed[3]
@@ -389,7 +390,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand 
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
-        wma_win = meth5py.methylation_average_required_bed(meths, bin_bed, '', 4)
+        #wma_win = meth5py.methylation_average_required_bed(meths, bin_bed, '', 4)
         if outstat == '':
             print("%s,%s,%s,%s,%s,%s" % (required_bed[0], str(bins + 1), str(bins + window_size),mhl_value, no_cs_hap_bins,ncols))
         else:
@@ -401,7 +402,10 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand 
 def potato_mhl_calc(args):
     log.info("loading the input files!")
     inBam = pysam.AlignmentFile(args['inFile'], "rb")
-    meths = meth5py.load_hdf5_methylation_file(args['inhdf5'])
+    if args['inhdf5'] != '':
+        meths = meth5py.load_hdf5_methylation_file(args['inhdf5'])
+    else:
+        meths = ''
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(args['fastaFile'])
     #window_size = args['window_size']

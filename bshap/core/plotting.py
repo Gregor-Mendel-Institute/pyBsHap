@@ -10,13 +10,17 @@ log = logging.getLogger(__name__)
 
 ## A joint plot using seaborn
 
-def meths_jointplot(x, y, reqcond, kde=True, hexplt=False):
+def meths_jointplot(x, y, reqcond, filter_pos=False, kde=True, hexplt=False):
     ## reqcond is a dictionry with values given below.
     # 1) reqcond['color']
     # 2) reqcond['xlab']
     # 3) reqcond['ylab']
     # 4) reqcond['plt_limits']
     # 4) reqcond['size']
+    if filter_pos:
+        filter_inds = np.where(x + y > 0)[0]
+        x = x[filter_inds]
+        y = y[filter_inds]
     if not reqcond.has_key('color'):
         reqcond['color'] = "#43a2ca"
     if not reqcond.has_key('xlab'):
@@ -49,7 +53,11 @@ def meths_jointplot(x, y, reqcond, kde=True, hexplt=False):
     #from sklearn.metrics import mean_squared_error
     #from math import sqrt
     #p = p.annotate(mean_squared_error, template="MSE: {val:.4f}; npts: %s" % len(p.x), fontsize=12)
-    p = p.annotate(stats.pearsonr, template="{stat}: {val:.2f}; npts: %s" % len(p.x), fontsize=12)
+    if reqcond.has_key('annotate'):
+        t_anno = "%s; npts: %s" % (reqcond['annotate'], len(p.x))
+        p = p.annotate(stats.pearsonr, template="%s" % t_anno, fontsize=12)
+    else:
+        p = p.annotate(stats.pearsonr, template="{stat}: {val:.2f}; npts: %s" % len(p.x), fontsize=12)
     p.ax_joint.plot(reqcond['plt_limits'], reqcond['plt_limits'], ':k')
     p.ax_marg_x.axis([reqcond['plt_limits'][0], reqcond['plt_limits'][1], 0, len(p.x)/5])
     p.ax_marg_y.axis([0, len(p.x)/5, reqcond['plt_limits'][0], reqcond['plt_limits'][1]])
