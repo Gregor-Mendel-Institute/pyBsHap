@@ -356,7 +356,7 @@ def get_hap_comb(cs_hap_bins):
 def calculate_mhl(cs_hap_bins):
     ## this is adapted from Guo et al. 2017 Figure 2.
     if len(cs_hap_bins) <= 1:
-        return((None, 0, 0))
+        return((np.nan, 0, 0))
     nplen = np.vectorize(len)
     hap_comb = get_hap_comb(cs_hap_bins)
     mhl_value = np.zeros(0, dtype=float)
@@ -390,11 +390,15 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand 
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
-        #wma_win = meth5py.methylation_average_required_bed(meths, bin_bed, '', 4)
-        if outstat == '':
-            print("%s,%s,%s,%s,%s,%s" % (required_bed[0], str(bins + 1), str(bins + window_size),mhl_value, no_cs_hap_bins,ncols))
+        wma_win = meth5py.methylation_average_required_bed(meths, bin_bed, '', 1)
+        if wma_win == 0 or np.isnan(wma_win):
+            frac_mhl = 0
         else:
-            outstat.write("%s,%s,%s,%s,%s,%s\n" % (required_bed[0], str(bins + 1), str(bins + window_size), mhl_value, no_cs_hap_bins,ncols))
+            frac_mhl = mhl_value/float(wma_win)
+        if outstat == '':
+            print("%s,%s,%s,%s,%s,%s" % (required_bed[0], str(bins + 1), str(bins + window_size), frac_mhl, no_cs_hap_bins, ncols))
+        else:
+            outstat.write("%s,%s,%s,%s,%s,%s\n" % (required_bed[0], str(bins + 1), str(bins + window_size), frac_mhl, no_cs_hap_bins,ncols))
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
     return(0)
@@ -408,8 +412,10 @@ def potato_mhl_calc(args):
         meths = ''
     (chrs, chrslen, binLen) = getChrs(inBam)
     tair10 = Fasta(args['fastaFile'])
-    #window_size = args['window_size']
-    window_size = binLen
+    if args['window_size'] is None:
+        window_size = binLen
+    else:
+        window_size = args['window_size']
     log.info("finished!")
     if args['outFile'] != "STDOUT":
         outstat = open(args['outFile'], 'w')
@@ -417,13 +423,14 @@ def potato_mhl_calc(args):
     else:
         outstat = ''
         print("chr,start,end,mhl_stat,counts,ncols")
-    if args['reqRegion'] is not None:
+    if args['reqRegion'] != '0,0,0':
         required_region = args['reqRegion'].split(',')
-        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), window_size, 1]
+        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), window_size]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
         get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat, args['strand'])
         log.info("finished!")
         return(0)
+    import ipdb; ipdb.set_trace()
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         required_bed = [cid, 0, clen, window_size]   ### 0 is to not print reads

@@ -54,7 +54,7 @@ def get_options(program_license,program_version_message):
   mhlparser.add_argument("-i", "--input_bam", dest="inFile", help="aligned BAM file for bs-seq reads")
   mhlparser.add_argument("-r", "--fasta-file", dest="fastaFile", help="Reference fasta file, TAIR10 genome")
   mhlparser.add_argument("-d", "--in_hdf5", dest="inhdf5", help="hdf5 file generated using meth5py", default='')
-  mhlparser.add_argument("-w", "--window_size", dest="window_size", help="window size", type = int, default=80)
+  mhlparser.add_argument("-w", "--window_size", dest="window_size", help="window size", type=int)
   mhlparser.add_argument("-x", "--specificRegion", dest="reqRegion", help="region to be checked, Ex. Chr1,1,100 --- an aln file is generated given this", default = '0,0,0')
   mhlparser.add_argument("-s", "--strand", dest="strand", help="strand for the reads to get the MHL, maybe later I would print for the both", type = str, default='0')
   mhlparser.add_argument("-o", "--output", dest="outFile", help="Output file", default="STDOUT")

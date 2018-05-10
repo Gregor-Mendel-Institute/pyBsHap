@@ -285,12 +285,12 @@ class HDF5MethTable(object):
         else:
             return(self.h5file['pos'][filter_pos_ix])
 
-    def get_bed_df(self, filter_pos_ix, full_bed=False):
+    def get_bed_df(self, filter_pos_ix, full_bed=False, read_threshold=0):
         req_pos = self.get_positions(filter_pos_ix)
         if full_bed:
             conname = self.get_mc_class(filter_pos_ix)
             strand = self.get_strand(filter_pos_ix)
-            permeth = self.get_permeths(filter_pos_ix)
+            permeth = self.get_permeths(filter_pos_ix, read_threshold=read_threshold)
             return(pd.DataFrame(np.column_stack((self.get_chrs_list(filter_pos_ix),req_pos, req_pos + 1, conname, permeth, strand)), columns=['chr', 'start', 'end', 'mc_class', 'permeth', 'strand']))
         return(pd.DataFrame(np.column_stack((self.get_chrs_list(filter_pos_ix),req_pos, req_pos + 1)), columns=['chr', 'start', 'end']))
 
