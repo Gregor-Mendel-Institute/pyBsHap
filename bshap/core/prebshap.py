@@ -375,6 +375,8 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand 
     bin_start = required_bed[1] - (required_bed[1] % window_size)
     estimated_bins = range(bin_start, required_bed[2], window_size)
     progress_bins = 0
+    #### iter meths in the required bed.
+    meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
     for bins in estimated_bins:        ## sliding windows with window_size
         progress_bins += 1
         cs_hap_bins = np.zeros(0, dtype="string")
@@ -390,7 +392,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand 
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
-        wma_win = meth5py.methylation_average_required_bed(meths, bin_bed, '', 1)
+        wma_win = meth5py.MethylationSummaryStats(meths, meths_bins.next()[1], 1)
         if wma_win == 0 or np.isnan(wma_win):
             frac_mhl = 0
         else:
@@ -430,7 +432,6 @@ def potato_mhl_calc(args):
         get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat, args['strand'])
         log.info("finished!")
         return(0)
-    import ipdb; ipdb.set_trace()
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         required_bed = [cid, 0, clen, window_size]   ### 0 is to not print reads

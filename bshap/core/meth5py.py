@@ -208,20 +208,6 @@ def iter_inds(t_inds, chunk_size):
     if result:
         yield(result)
 
-def groupby_nparray(positions, chr_start, chrslen, chunk_size):
-    ind = 0
-    for t in range(1, chrslen, chunk_size):
-        result = []
-        bin_bed = [int(t), int(t) + chunk_size - 1]
-        for epos in positions[ind:]:
-            if epos >= bin_bed[0]:
-                if epos <= bin_bed[1]:
-                    result.append(ind + chr_start)
-                elif epos > bin_bed[1] :
-                    yield((bin_bed, result))
-                    break
-            ind = ind + 1
-
 
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
@@ -254,7 +240,7 @@ class HDF5MethTable(object):
         req_chr_ind = np.where(np.array(chrs) == bin_bed[0])[0][0]
         req_chr_pos_inds = [x_chrpositions[req_chr_ind],x_chrpositions[req_chr_ind + 1]]
         req_inds = x_chrpositions[req_chr_ind] + np.searchsorted(x_pos[req_chr_pos_inds[0]:req_chr_pos_inds[1]],[bin_bed[1],bin_bed[2]], side='right')
-        return(range(req_inds[0],req_inds[1]))
+        return(np.arange(req_inds[0],req_inds[1]))
 
     def get_chrs_list(self, filter_pos_ix):
         #if filter_pos_ix is None:
@@ -384,12 +370,27 @@ class HDF5MethTable(object):
         chr_inds = [chrpositions[req_chr_ind], chrpositions[req_chr_ind + 1]]
         return((req_chr_ind, chr_inds))
 
-    def iter_windows(self, chrid, window_size):
+    def iter_chr_windows(self, chrid, window_size):
         req_chr_ind, chr_inds = self.get_chrinds(chrid)
-        chr_pos = self.h5file['pos'][chr_inds[0]:chr_inds[1]]
-        chr_pos_grouped = groupby_nparray(chr_pos, chr_inds[0], golden_chrlen[req_chr_ind], window_size)
-        return(chr_pos_grouped)
+        return(self.iter_bed_windows([chrid, 1, chrslen[req_chr_ind]], window_size))
 
+    def iter_bed_windows(self, required_bed, window_size):
+        ## required_bed = ["Chr1", 1, 100]
+        filter_pos_ix = self.get_filter_inds(required_bed)
+        if len(filter_pos_ix) > 0:
+            filter_pos = self.get_positions(filter_pos_ix)
+            ind = 0
+            for t in range(required_bed[1], required_bed[2], window_size):
+                result = []
+                bin_bed = [int(t), int(t) + window_size - 1]
+                for epos in filter_pos[ind:]:
+                    if epos >= bin_bed[0]:
+                        if epos <= bin_bed[1]:
+                            result.append(filter_pos_ix[ind])
+                        elif epos > bin_bed[1] :
+                            yield((bin_bed, result))
+                            break
+                        ind = ind + 1
 
 def generate_meths_in_windows(meths, out_file, window_size, category=1, req_context=None):
     ## Methylation category here by default is weighted average
@@ -398,7 +399,7 @@ def generate_meths_in_windows(meths, out_file, window_size, category=1, req_cont
         die("ouput bedgraph file (%s) is already present" % out_file)
     outmeths_avg = open(out_file, 'w')
     for echr, echrlen in zip(chrs, golden_chrlen):
-        self_windows = meths.iter_windows(echr, window_size)
+        self_windows = meths.iter_chr_windows(echr, window_size)
         count = 0
         log.info("analyzing %s" % echr)
         for ewin in self_windows:
