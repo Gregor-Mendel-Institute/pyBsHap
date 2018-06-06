@@ -334,7 +334,7 @@ check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 431466	, end 
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 2473099	, end = 2473306), Name = "DMR1", type = "AT1TE08055")   ### TE1 in DMR
 ### CMT2 TE
 check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 9642845, end = 9643142), Name = "DMR1", type = "AT1TE31080")   ### CMT2 TE
-check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 13324758, end = 13329639), Name = "DMR1", type = "AT1TE43585")   ### CMT2 TE
+check.gr <- GRanges(seqnames = c("Chr1"), ranges = IRanges(start = 13324758, end = 13329639), Name = "CMT2 targetted TE", type = "AT1TE43585")   ### CMT2 TE
 ### ___________________________________________
 ## Run all the commands below
 sra_names[i]
@@ -368,7 +368,7 @@ meth.region.plot(check.gr,input_h5file, updown = updown, title = sra_names[i])
 par(resetPar())
 par(mar = c(5.5, 4.5, 10, 4) )
 par(new=T)
-plot(seq( length(mhl_regions) -1), tail(as.numeric(sapply(mhl_regions, function(x){ unlist(strsplit(x, ","))[4]   } )), -1) , axes = F, ylim = c(0, 1), xlab = "", ylab = "", pch = 19)
+plot(seq( length(mhl_regions) -1), tail(as.numeric(sapply(mhl_regions, function(x){ unlist(strsplit(x, ","))[4]   } )), -1) , axes = F, ylim = c(0, 0.5), xlab = "", ylab = "", pch = 19)
 axis(4)
 mtext("MHL", line = 2, 4)
 

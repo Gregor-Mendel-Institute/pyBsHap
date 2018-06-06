@@ -50,9 +50,6 @@ def meths_jointplot(x, y, reqcond, filter_pos=False, kde=True, hexplt=False):
             else:
                 p = sns.jointplot(x = x, y = y, kind = "scatter", alpha = 0.1, color=reqcond['color'])
     p.set_axis_labels(reqcond['xlab'], reqcond['ylab'])
-    #from sklearn.metrics import mean_squared_error
-    #from math import sqrt
-    #p = p.annotate(mean_squared_error, template="MSE: {val:.4f}; npts: %s" % len(p.x), fontsize=12)
     if reqcond.has_key('annotate'):
         t_anno = "%s; npts: %s" % (reqcond['annotate'], len(p.x))
         p = p.annotate(stats.pearsonr, template="%s" % t_anno, fontsize=12)
