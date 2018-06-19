@@ -170,7 +170,26 @@ def derive_common_positions(meths_list):
         # So, make sure you have some place in the RAM.
         log.info("reading in through chromosome %s" % e_chr)
         derive_common_positions_echr(meths_list, e_chr)
+    log.info("done!")
     return(meths_list)
+
+def derive_common_context_positions(meths_list):
+    log.info("identifying common positions in meths list")
+    meths_list = derive_common_positions(meths_list)
+    # get 2d np array for all mc_class
+    log.info("getting mc class at common positions")
+    mc_class_meths = [m.get_mc_class(m.filter_pos_ix) for m in meths_list]
+    mc_class_meths = np.array(mc_class_meths)
+    if mc_class_meths.shape[0] == 2:
+        req_pos_ix = np.where(mc_class_meths[0] == mc_class_meths[1])[0]
+    else:
+        req_pos_ix = [len(np.unique(mc_class_meths[:,i])) == 1  for i in range(mc_class_meths.shape[1])]
+        req_pos_ix = np.where(np.array(req_pos_ix))[0]
+    for m in meths_list:
+        m.filter_pos_ix = m.filter_pos_ix[req_pos_ix]
+    log.info("done!")
+    return(meths_list)
+
 
 def write_combined_h5_permeths(meths_list, output_file, read_threshold=0):
     ### Here the input is a list of meths object all the hdf5 files

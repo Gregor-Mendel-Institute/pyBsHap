@@ -135,9 +135,9 @@ def getMethRead(tair10, binread):
             tCs[methcontext[1]] += 1
             if binread.seq[i].upper() == context:
                 mCs[methcontext[1]] += 1
-    nc_thres = 0
-    rmeth = [float(mCs[i])/tCs[i] if tCs[i] > nc_thres else -1 for i in range(3)]
-    tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) > nc_thres else -1
+    nc_thres = 3
+    rmeth = [float(mCs[i])/tCs[i] if tCs[i] >= nc_thres else -1 for i in range(3)]
+    tmeth = float(sum(mCs))/sum(tCs) if sum(tCs) >= nc_thres else -1
     #permeths = [tmeth, rmeth[0], rmeth[1], rmeth[2]]
     #permeths = [tmeth, tCs[0], tCs[1], tCs[2]]
     permeths = [tmeth, tCs[0], rmeth[0], tCs[1], rmeth[1], tCs[2], rmeth[2]]
@@ -224,7 +224,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
         if len(required_region) == 3:
             #AlignIO.write(window_alignment, 'meths.' + outFile + '.aln', "clustal")
             (type_counts,type_freqs) = clusteringReads(binmeth_whole)
-            types_summary = {'counts': type_counts, 'region': interesting_region, 'input_bam': os.path.basename(bamFile), 'freqs': type_freqs}
+            types_summary = {'counts': type_counts, 'region': interesting_region, 'input_bam': os.path.basename(bamFile), 'freqs': type_freqs, 'binmeth_whole': binmeth_whole}
             with open('meths.' + outFile + '.summary.json', "w") as out_stats:
                 out_stats.write(json.dumps(types_summary))
         meths.close()
