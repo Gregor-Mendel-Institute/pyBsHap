@@ -74,6 +74,17 @@ def decodeFlag(flag):
     notag = (12 - len(bintag)) * '0'
     return(bintag + notag)
 
+def getStrandPE(binread):
+    df = decodeFlag(binread.flag)
+    if binread.is_read2:
+        ## if it is read2, then we have to reverse strand flag? need to double check this one
+        if df[4] == '1':
+            return('0')
+        else:
+            return('1')
+    else:
+        return(df[4])
+
 def getStrandContext(strand):
     if strand == '0': ## Forward read, count the number of C's
         re_string = ['C','T','.']
@@ -111,7 +122,7 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed, defreturn = 0):
     ## bin_bed = ['Chr1', start, end, binLen, pointPos]
     ## intersect_bed = [s, e]
     char_add = 'N'
-    strand = decodeFlag(binread.flag)[4]
+    strand = getStrandPE(binread)
     refseq, rseq = getMatchedSeq(binread, tair10, bin_bed)
     dot_rseq = getHighlightedSeqs(refseq, rseq, strand)
     fin_rseq = char_add * (intersect_bed[0] - bin_bed[1]) + dot_rseq + char_add * (bin_bed[2] - intersect_bed[1])
@@ -121,7 +132,7 @@ def getSeqRecord(binread, tair10, bin_bed, intersect_bed, defreturn = 0):
         return(fin_rseq)
 
 def getMethRead(tair10, binread):
-    strand = decodeFlag(binread.flag)[4]
+    strand = getStrandPE(binread)
     error_rate = 0.01
     context = getStrandContext(strand)[0]
     mCs, tCs, read_length = [0,0,0], [0,0,0], 0
@@ -174,7 +185,7 @@ def getMethWind(inBam, tair10, required_bed, meths = '', strand = '0'):
         dot_refseq = re.sub('A|T', '.', dot_refseq.upper())
         bins_alignment = [SeqRecord(Seq(dot_refseq, generic_dna), id = required_bed[0] + ':' + str(bins) + '-' + str(bins + binLen))]
         for binread in inBam.fetch(required_bed[0], bins, bins + binLen):
-            rflag = decodeFlag(binread.flag)
+            r_strand = getStrandPE(binread)
             bin_bed = [required_bed[0], bins, bins + binLen]
             if filterRead(binread):
                 continue
@@ -185,7 +196,7 @@ def getMethWind(inBam, tair10, required_bed, meths = '', strand = '0'):
                 permeths = getMethRead(tair10, binread) ## taking the first and last
                 binmeth.append([permeths[i] for i in [0,2,4,6]])
                 binmeth_whole.append(permeths)
-                if rflag[4] == strand:         ### Get only forward reads in the alignment
+                if r_strand == strand:         ### Get only forward reads in the alignment
                     bins_alignment.append(rseq_record)
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
@@ -369,7 +380,7 @@ def calculate_mhl(cs_hap_bins):
     mhl_value_final = np.sum(mhl_value) / sum(range(ncols + 1))
     return((mhl_value_final, len(cs_hap_bins), ncols))
 
-def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand = '0'):
+def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
     window_size = required_bed[3]
     read_length_thres = window_size/2
     bin_start = required_bed[1] - (required_bed[1] % window_size)
@@ -377,27 +388,25 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = '', strand 
     progress_bins = 0
     #### iter meths in the required bed.
     meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
-    for bins in estimated_bins:        ## sliding windows with window_size
+    for bins, temp_meth_bins in zip(estimated_bins, meths_bins) :        ## sliding windows with window_size
         progress_bins += 1
         cs_hap_bins = np.zeros(0, dtype="string")
         bin_bed = [required_bed[0], bins, bins + window_size - 1]
         for binread in inBam.fetch(str(bin_bed[0]), bin_bed[1], bin_bed[2]):
-            rflag = decodeFlag(binread.flag)
+            r_strand = getStrandPE(binread)
             if filterRead(binread): ## Filtering the dupplicated reads.
                 continue
-            #if rflag[4] == strand:         ### Get only forward reads in the alignment
             intersect_bed = [bin_bed[0], binread.reference_start, binread.reference_end]
             rseq_record = getSeqRecord(binread, tair10, intersect_bed, [intersect_bed[1], intersect_bed[2]])
-            cs_bin = getCs_seq_record(rseq_record, rflag[4])
+            cs_bin = getCs_seq_record(rseq_record, r_strand)
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
-        temp_meth_bins = meths_bins.next()
         wma_win = meth5py.MethylationSummaryStats(meths, temp_meth_bins[1], 1)
         if wma_win == 0 or np.isnan(wma_win):
-            frac_mhl = 0
+            frac_mhl = mhl_value
         else:
-            frac_mhl = mhl_value/float(wma_win)
+            frac_mhl = mhl_value
         if outstat == '':
             print("%s,%s,%s,%s,%s,%s" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
         else:
@@ -419,23 +428,23 @@ def potato_mhl_calc(args):
         window_size = binLen
     else:
         window_size = args['window_size']
-    log.info("finished!")
+    log.info("done!")
     if args['outFile'] != "STDOUT":
         outstat = open(args['outFile'], 'w')
         outstat.write("chr,start,end,mhl_stat,wma_win,counts\n")
     else:
         outstat = ''
-        print("chr,start,end,mhl_stat,counts,ncols")
+        print("chr,start,end,mhl_stat,wma_win,counts")
     if args['reqRegion'] != '0,0,0':
         required_region = args['reqRegion'].split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), window_size]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat, args['strand'])
+        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat)
         log.info("finished!")
         return(0)
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         required_bed = [cid, 1, clen, window_size]   ### 0 is to not print reads
-        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat, args['strand'])
+        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat)
     log.info("finished!")
     return(0)
