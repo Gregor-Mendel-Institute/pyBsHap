@@ -10,6 +10,7 @@ import sys
 from . import run_bedtools
 import csv
 import itertools
+import pybedtools as pybed
 
 log = logging.getLogger(__name__)
 chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
@@ -41,7 +42,7 @@ def generate_h5_1001g(bg_files, outH5file):
     h5file = h5.File(outH5file, 'w')
     h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     h5file.create_dataset('files', data=np.array(bg_files), shape=(num_lines,))
-    h5file.create_dataset('accessions', shape= ((num_lines,)), dtype='S12')
+    h5file.create_dataset('accessions', shape= ((num_lines,)), dtype='S20')
     base_bg = read_bg_file(bg_files[0])
     h5file['accessions'][0] = os.path.basename(bg_files[0]).split(".")[1]
     n_rows = base_bg.shape[0]
@@ -116,21 +117,23 @@ class HDF51001gTable(object):
         else:
             return(self.h5file['value'][filter_pos_ix,:])
 
-    def get_bed_df(self, filter_pos_ix):
+    def get_bed_df(self, filter_pos_ix, return_str = False):
         req_chr = self.get_chr(filter_pos_ix)
         req_start = self.get_start(filter_pos_ix)
         req_end = self.get_end(filter_pos_ix)
+        if return_str:
+            return(np.array(pd.Series(req_chr).map(str) + ',' + pd.Series(req_start).map(str) + ',' + pd.Series(req_end).map(str), dtype = "str" ))
         return(pd.DataFrame(np.column_stack((req_chr,req_start, req_end)), columns=['chr', 'start', 'end']))
 
     def get_inds_overlap_region(self, region_bed):
         ## region_bed = ['Chr1',3631, 5899]
-        # returns indices for the overlap of given region
-        # returns even if overlap is 1 bp
-        # also make sure start is always greater than end
+        region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
         chr_inds = np.where(self.get_chr(None) == region_bed[0])[0]
-        #chr_start = self.get_start(chr_inds)
-        chr_end = self.get_end(chr_inds)
-        return(np.where((chr_end >= region_bed[1]) & (chr_end < region_bed[2]))[0])
+        chr_df = self.get_bed_df(chr_inds)
+        chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
+        chr_intersect_str = np.array(chr_intersect_df.iloc[:,0] + "," + chr_intersect_df.iloc[:,1].map(str) + "," +  chr_intersect_df.iloc[:,2].map(str), dtype="str")
+        chr_str = np.array(chr_df.iloc[:,0].map(str) + ',' + chr_df.iloc[:,1].map(str) + ',' + chr_df.iloc[:,2].map(str), dtype = "str" )
+        return(np.where( np.in1d( chr_str, chr_intersect_str ) )[0])
 
     def get_inds_overlap_region_file(self, region_file, just_names=False, araport11_file=None):
         whole_bed = self.get_bed_df(None)
@@ -143,3 +146,9 @@ class HDF51001gTable(object):
         chr_start = self.get_start(chr_inds)
         chr_end = self.get_end(chr_inds)
         return(np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0])
+
+    def get_inds_matching_region_file(self, region_file):
+        region_df = pd.read_table(region_file)
+        region_cols = np.array(region_df.iloc[:,0] + "," + region_df.iloc[:,1].map(str) + "," +  region_df.iloc[:,2].map(str), dtype="str")
+        bed_str = self.get_bed_df(None, return_str=True)
+        return(np.where( np.in1d(bed_cols, region_cols)  )[0])
