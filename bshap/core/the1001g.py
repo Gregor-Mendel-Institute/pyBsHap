@@ -78,7 +78,7 @@ class HDF51001gTable(object):
         self.start = self.h5file['start']
         self.end = self.h5file['end']
         self.value = self.h5file['value']
-        self.accessions = self.h5file['accessions']
+        self.accessions = np.array(self.h5file['accessions'])
 
     def get_chr(self, filter_pos_ix=None):
         if filter_pos_ix is None:
@@ -122,8 +122,24 @@ class HDF51001gTable(object):
         req_end = self.get_end(filter_pos_ix)
         return(pd.DataFrame(np.column_stack((req_chr,req_start, req_end)), columns=['chr', 'start', 'end']))
 
-    def get_filter_inds(self,bin_bed):
-        ## bin_bed = pd.dataframe
-        # returns values given bin_bed (a pd dataframe with chr, start and end)
+    def get_inds_overlap_region(self, region_bed):
+        ## region_bed = ['Chr1',3631, 5899]
+        # returns indices for the overlap of given region
+        # returns even if overlap is 1 bp
+        # also make sure start is always greater than end
+        chr_inds = np.where(self.get_chr(None) == region_bed[0])[0]
+        #chr_start = self.get_start(chr_inds)
+        chr_end = self.get_end(chr_inds)
+        return(np.where((chr_end >= region_bed[1]) & (chr_end < region_bed[2]))[0])
 
-        import ipdb; ipdb.set_trace()
+    def get_inds_overlap_region_file(self, region_file, just_names=False, araport11_file=None):
+        whole_bed = self.get_bed_df(None)
+        return(run_bedtools.get_filter_bed_ix(region_file, whole_bed, just_names=just_names, araport11_file=araport11_file))
+
+    def get_inds_matching_region(self, region_bed):
+        # returns values given region_bed (a pd dataframe with chr, start and end)
+        ## maybe useful for wma hdf5 files
+        chr_inds = np.where(self.get_chr(None) == region_bed[0])[0]
+        chr_start = self.get_start(chr_inds)
+        chr_end = self.get_end(chr_inds)
+        return(np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0])
