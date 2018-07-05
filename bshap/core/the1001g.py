@@ -125,12 +125,15 @@ class HDF51001gTable(object):
             return(np.array(pd.Series(req_chr).map(str) + ',' + pd.Series(req_start).map(str) + ',' + pd.Series(req_end).map(str), dtype = "str" ))
         return(pd.DataFrame(np.column_stack((req_chr,req_start, req_end)), columns=['chr', 'start', 'end']))
 
-    def get_inds_overlap_region(self, region_bed):
+    def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
         region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
         chr_inds = np.where(self.get_chr(None) == region_bed[0])[0]
         chr_df = self.get_bed_df(chr_inds)
-        chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
+        if g is None:
+            chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
+        else:
+            chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True, sorted = True, g = g ).to_dataframe()
         chr_intersect_str = np.array(chr_intersect_df.iloc[:,0] + "," + chr_intersect_df.iloc[:,1].map(str) + "," +  chr_intersect_df.iloc[:,2].map(str), dtype="str")
         chr_str = np.array(chr_df.iloc[:,0].map(str) + ',' + chr_df.iloc[:,1].map(str) + ',' + chr_df.iloc[:,2].map(str), dtype = "str" )
         return(np.where( np.in1d( chr_str, chr_intersect_str ) )[0])
@@ -152,3 +155,12 @@ class HDF51001gTable(object):
         region_cols = np.array(region_df.iloc[:,0] + "," + region_df.iloc[:,1].map(str) + "," +  region_df.iloc[:,2].map(str), dtype="str")
         bed_str = self.get_bed_df(None, return_str=True)
         return(np.where( np.in1d(bed_cols, region_cols)  )[0])
+
+    def get_phenos_df(self, filter_pos_ix, outfile):
+        values_df = np.nanmean( self.get_value(filter_pos_ix), axis = 0 )
+        out = open(outfile, 'w')
+        out.write("accessionid,pheno\n")
+        for a_ind in range(len(self.accessions)):
+            if ~np.isnan(values_df[a_ind]):
+                out.write("%s,%s\n" % ( self.accessions[a_ind], values_df[a_ind] ))
+        out.close()
