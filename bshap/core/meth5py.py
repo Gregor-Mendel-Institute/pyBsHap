@@ -12,9 +12,9 @@ import csv
 import itertools
 
 log = logging.getLogger(__name__)
-chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
-chrslen = [34964571, 22037565, 25499034, 20862711, 31270811]
-golden_chrlen = [30427671, 19698289, 23459830, 18585056, 26975502]
+
+from . import the1001g
+genome = the1001g.ArabidopsisGenome()
 
 def die(msg):
   sys.stderr.write('Error: ' + msg + '\n')
@@ -76,7 +76,7 @@ def generage_h5file_from_allc(allc_id, allc_path, outFile, pval_thres=0.01):
         allcBed_new = pd.DataFrame(columns = allcBed.columns)
         chrpositions = np.zeros(1, dtype="int")
         log.info("sorting the bed file!")
-        for ec in chrs:
+        for ec in genome.chrs:
             allcBed_echr = allcBed.iloc[np.where(allcBed.iloc[:,0] == ec)[0], :]
             allcBed_new = allcBed_new.append(allcBed_echr.iloc[np.argsort(np.array(allcBed_echr.iloc[:,1], dtype=int)), :] , ignore_index=True)
             chrpositions = np.append(chrpositions, chrpositions[-1] + allcBed_echr.shape[0])
@@ -135,7 +135,7 @@ def two_meths_commonpos_echr(meths_1, meths_2, chrid, methylated=True, read_thre
 def two_meths_commonpos(meths_1, meths_2, methylated=True, read_threshold = 5):
     meths_1_creq = np.zeros(0, dtype=int)
     meths_2_creq = np.zeros(0, dtype=int)
-    for e_chr in chrs:
+    for e_chr in genome.chrs:
         log.info("reading in through chromosome %s" % e_chr)
         ind_1, ind_2 = two_meths_commonpos_echr(meths_1, meths_2, e_chr, methylated, read_threshold)
         meths_1_creq = np.append(meths_1_creq, ind_1)
@@ -149,7 +149,7 @@ def derive_common_positions_echr(meths_list, chrid):
     # meth_list is a list of meths meth5py object read
     # returns common positions.
     chrid_ind = meths_list[0].get_chrinds(chrid)[0]
-    common_positions = np.arange(golden_chrlen[chrid_ind], dtype="int")
+    common_positions = np.arange(genome.golden_chrlen[chrid_ind], dtype="int")
     for m in meths_list:
         m.chrinds = m.get_chrinds(chrid)
         common_positions = np.intersect1d(common_positions, m.positions[m.chrinds[1][0]:m.chrinds[1][1]], assume_unique = True)
@@ -165,7 +165,7 @@ def derive_common_positions_echr(meths_list, chrid):
 def derive_common_positions(meths_list):
     ## Here you get all the common positions going in a loop for each chromosome.
     # It might be some time consuming.
-    for e_chr in chrs:
+    for e_chr in genome.chrs:
         # the function below is appending the list m.filter_pos_ix
         # So, make sure you have some place in the RAM.
         log.info("reading in through chromosome %s" % e_chr)
@@ -254,31 +254,23 @@ class HDF5MethTable(object):
             return(None)
         if len(bin_bed) != 3:
             die("provide the genomic position as array of length 3. ex., ['Chr1', 0, 100]")
-        x_pos = self.h5file['pos']
-        x_chrpositions = np.append(np.array(self.h5file['chrpositions']), len(x_pos))
-        req_chr_ind = np.where(np.array(chrs) == bin_bed[0])[0][0]
-        req_chr_pos_inds = [x_chrpositions[req_chr_ind],x_chrpositions[req_chr_ind + 1]]
-        req_inds = x_chrpositions[req_chr_ind] + np.searchsorted(x_pos[req_chr_pos_inds[0]:req_chr_pos_inds[1]],[bin_bed[1],bin_bed[2]], side='right')
+        req_chr_ind, chr_inds = self.get_chrinds(bin_bed[0])
+        if req_chr_ind is None:
+            return(np.zeros(0, dtype=int))
+        req_inds = chr_inds[0] + np.searchsorted(self.positions[chr_inds[0]:chr_inds[1]], [bin_bed[1],bin_bed[2]], side='right')
         return(np.arange(req_inds[0],req_inds[1]))
 
     def get_chrs_list(self, filter_pos_ix):
-        #if filter_pos_ix is None:
-        #    return(np.array(self.h5file['chr']))
-        #elif type(filter_pos_ix) is np.ndarray:
-        #    rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-        #    return(self.h5file['chr'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        #else:
-        #    return(self.h5file['chr'][filter_pos_ix])
-        ## I need to make same chr list for all files.
         if filter_pos_ix is None:
             filter_pos_ix = np.arange(len(self.positions))
-        if len(filter_pos_ix) > 0:
-            chr_list = np.zeros(len(filter_pos_ix), dtype="S8")
-            filter_pos_ix = np.array(filter_pos_ix, dtype="int")
-            for echr in chrs:
-                chrinds = self.get_chrinds(echr)
-                chr_list[np.where((filter_pos_ix >= chrinds[1][0]) & (filter_pos_ix < chrinds[1][1]))[0]] = echr
-            return(chr_list)
+        if len(filter_pos_ix) == 0:
+            return(np.zeros(0, dtype="S8"))
+        chr_list = np.zeros(len(filter_pos_ix), dtype="S8")
+        filter_pos_ix = np.array(filter_pos_ix, dtype="int")
+        for echr in genome.chrs:
+            chrinds = self.get_chrinds(echr)
+            chr_list[np.where((filter_pos_ix >= chrinds[1][0]) & (filter_pos_ix < chrinds[1][1]))[0]] = echr
+        return(chr_list)
 
     def get_positions(self, filter_pos_ix=None):
         if filter_pos_ix is None:
@@ -385,13 +377,15 @@ class HDF5MethTable(object):
 
     def get_chrinds(self, chrid):
         chrpositions = np.append(np.array(self.h5file['chrpositions']), len(self.h5file['pos']))
-        req_chr_ind = np.where(np.array(chrs) == chrid)[0][0]
+        req_chr_ind = genome.get_chr_ind(chrid)
+        if req_chr_ind is None:
+            return( (None, None) )
         chr_inds = [chrpositions[req_chr_ind], chrpositions[req_chr_ind + 1]]
         return((req_chr_ind, chr_inds))
 
     def iter_chr_windows(self, chrid, window_size):
         req_chr_ind, chr_inds = self.get_chrinds(chrid)
-        return(self.iter_bed_windows([chrid, 1, chrslen[req_chr_ind]], window_size))
+        return(self.iter_bed_windows([chrid, 1, genome.golden_chrlen[req_chr_ind]], window_size))
 
     def iter_bed_windows(self, required_bed, window_size):
         ## required_bed = ["Chr1", 1, 100]
@@ -417,7 +411,7 @@ def generate_meths_in_windows(meths, out_file, window_size, category=1, req_cont
     if os.path.isfile(out_file):
         die("ouput bedgraph file (%s) is already present" % out_file)
     outmeths_avg = open(out_file, 'w')
-    for echr, echrlen in zip(chrs, golden_chrlen):
+    for echr, echrlen in zip(genome.chrs, genome.golden_chrlen):
         self_windows = meths.iter_chr_windows(echr, window_size)
         count = 0
         log.info("analyzing %s" % echr)
