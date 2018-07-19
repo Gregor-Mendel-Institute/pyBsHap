@@ -12,6 +12,11 @@ import csv
 import itertools
 import pybedtools as pybed
 
+def getInd_bin_bed(bin_bed, tair10):
+    ## bin_bed = ["Chr1", 1, 1000]
+    bin_s = [int(bin_bed[0].replace("Chr", "")) - 1, int(bin_bed[1]), int(bin_bed[2])]
+    return(tair10.chr_inds[bin_s[0]] + int(( bin_s[1] + bin_s[2] )/2) )
+
 class ArabidopsisGenome(object):
     ## coordinates for ArabidopsisGenome using TAIR 10
 
@@ -37,6 +42,22 @@ class ArabidopsisGenome(object):
             return(np.where(real_chrs == echr_num)[0][0])
         except IndexError, err_idx:
             return(None)
+
+    def get_genomewide_inds(self, df_str):
+        ### This is the function to give the indices of the genome when you give a bed file.
+        if type(df_str) is not pd.core.series.Series and type(df_str) is not pd.core.frame.DataFrame:
+            die("please input pandas dataframe or series object")
+        elif type(df_str) is pd.core.series.Series:
+            df_str_np = np.array(df_str, dtype="string")
+            df_str_unique = np.unique(df_str_np, return_inverse=True)
+            df_str_inds = np.array(pd.Series(df_str_unique[0]).str.split(",").apply(getInd_bin_bed, args= (self,) ))
+            return( df_str_inds[df_str_unique[1]] )
+        elif type(df_str) is pd.core.frame.DataFrame:
+            ## here first column is chr and second is position
+            if df_str.shape[1] == 3:
+                df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
+            chrom = np.char.replace(np.core.defchararray.lower(np.array(df_str.iloc[:,0], dtype="string")), "chr", "")
+            return(self.chr_inds[np.array(chrom, dtype=int) - 1] + np.array(df_str.iloc[:,1]) )
 
 
 log = logging.getLogger(__name__)
@@ -99,52 +120,24 @@ class HDF51001gTable(object):
 
     def __init__(self,hdf5_file):
         self.h5file = h5.File(hdf5_file,'r')
-        self.chr = self.h5file['chr']
-        self.start = self.h5file['start']
-        self.end = self.h5file['end']
-        self.value = self.h5file['value']
+        self.chunk_size = self.h5file['chunk_size'][0]
         self.accessions = np.array(self.h5file['accessions'])
 
-    def get_chr(self, filter_pos_ix=None):
+    def __getattr__(self, name, filter_pos_ix=None):
+        if name not in ['chr', 'start', 'end', 'value']:
+            raise AttributeError("%s is not in the keys for HDF5. Only accepted values are ['chr', 'start', 'end', 'value']" % name)
         if filter_pos_ix is None:
-            return(np.array(self.h5file['chr']))
+            return(self.h5file[str(name)])
         elif type(filter_pos_ix) is np.ndarray:
             rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['chr'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+            return(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            return(self.h5file['chr'][filter_pos_ix])
-
-    def get_start(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['start']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['start'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['start'][filter_pos_ix])
-
-    def get_end(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['end']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['end'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['end'][filter_pos_ix])
-
-    def get_value(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['value']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['value'][filter_pos_ix[0]:filter_pos_ix[-1]+1,:][rel_pos_ix,:])
-        else:
-            return(self.h5file['value'][filter_pos_ix,:])
+            return(self.h5file[str(name)][filter_pos_ix])
 
     def get_bed_df(self, filter_pos_ix, return_str = False):
-        req_chr = self.get_chr(filter_pos_ix)
-        req_start = self.get_start(filter_pos_ix)
-        req_end = self.get_end(filter_pos_ix)
+        req_chr = self.__getattr__('chr', filter_pos_ix)
+        req_start = self.__getattr__('start', filter_pos_ix)
+        req_end = self.__getattr__('end', filter_pos_ix)
         if return_str:
             return(np.array(pd.Series(req_chr).map(str) + ',' + pd.Series(req_start).map(str) + ',' + pd.Series(req_end).map(str), dtype = "str" ))
         return(pd.DataFrame(np.column_stack((req_chr,req_start, req_end)), columns=['chr', 'start', 'end']))
@@ -152,7 +145,7 @@ class HDF51001gTable(object):
     def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
         region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
-        chr_inds = np.where(self.get_chr(None) == region_bed[0])[0]
+        chr_inds = np.where(self.__getattr__("chr", None) == region_bed[0])[0]
         chr_df = self.get_bed_df(chr_inds)
         if g is None:
             chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
@@ -169,9 +162,9 @@ class HDF51001gTable(object):
     def get_inds_matching_region(self, region_bed):
         # returns values given region_bed (a pd dataframe with chr, start and end)
         ## maybe useful for wma hdf5 files
-        chr_inds = np.where(self.get_chr(None) == region_bed[0])[0]
-        chr_start = self.get_start(chr_inds)
-        chr_end = self.get_end(chr_inds)
+        chr_inds = np.where(self.__getattr__("chr", None) == region_bed[0])[0]
+        chr_start = self.__getattr__("start", chr_inds)
+        chr_end = self.__getattr__("end", chr_inds)
         return(np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0])
 
     def get_inds_matching_region_file(self, region_file):
@@ -181,7 +174,9 @@ class HDF51001gTable(object):
         return(np.where( np.in1d(bed_cols, region_cols)  )[0])
 
     def get_phenos_df(self, filter_pos_ix, outfile):
-        values_df = np.nanmean( self.get_value(filter_pos_ix), axis = 0 )
+        values_df = np.nanmean( self.__getattr__("value", filter_pos_ix), axis = 0 )
+        if outfile is None:
+            return(pd.DataFrame(values_df, columns = ["accessionid", "pheno"] ).dropna())
         out = open(outfile, 'w')
         out.write("accessionid,pheno\n")
         for a_ind in range(len(self.accessions)):
@@ -194,25 +189,3 @@ class HDF51001gTable(object):
         if return_np:
             return(np.array(acc_ix))
         return(acc_ix)
-
-    @staticmethod
-    def getInds_araGenome(df_str):
-        tair10 = ArabidopsisGenome()
-        if type(df_str) is not pd.core.series.Series and type(df_str) is not pd.core.frame.DataFrame:
-            die("please input pandas dataframe or series object")
-        elif type(df_str) is pd.core.series.Series:
-            df_str_np = np.array(df_str, dtype="string")
-            df_str_unique = np.unique(df_str_np, return_inverse=True)
-            df_str_inds = np.array(pd.Series(df_str_unique[0]).str.split(",").apply(getInd_bin_bed, args= (tair10,)  ))
-            return( df_str_inds[df_str_unique[1]] )
-        elif type(df_str) is pd.core.frame.DataFrame:
-            ## here first column is chr and second is position
-            if df_str.shape[1] == 3:
-                df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
-            chrom = np.char.replace(np.core.defchararray.lower(np.array(df_str.iloc[:,0], dtype="string")), "chr", "")
-            return(tair10.chr_inds[np.array(chrom, dtype=int) - 1] + np.array(df_str.iloc[:,1]) )
-
-def getInd_bin_bed(bin_bed, tair10):
-    ## bin_bed = ["Chr1", 1, 1000]
-    bin_s = [int(bin_bed[0].replace("Chr", "")) - 1, int(bin_bed[1]), int(bin_bed[2])]
-    return(tair10.chr_inds[bin_s[0]] + int(( bin_s[1] + bin_s[2] )/2) )
