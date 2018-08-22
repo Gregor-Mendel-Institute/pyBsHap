@@ -145,7 +145,7 @@ class HDF51001gTable(object):
     def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
         region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
-        chr_inds = np.where(self.__getattr__("chr", None) == region_bed[0])[0]
+        chr_inds = np.where(np.array(self.chr) == region_bed[0])[0]
         chr_df = self.get_bed_df(chr_inds)
         if g is None:
             chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
@@ -176,7 +176,9 @@ class HDF51001gTable(object):
     def get_phenos_df(self, filter_pos_ix, outfile):
         values_df = np.nanmean( self.__getattr__("value", filter_pos_ix), axis = 0 )
         if outfile is None:
-            return(pd.DataFrame(values_df, columns = ["accessionid", "pheno"] ).dropna())
+            values_df_pd = pd.DataFrame( np.column_stack((self.accessions, values_df)), columns = ["accessionid", "pheno"] ).dropna()
+            values_df_pd['pheno'] = pd.to_numeric(values_df_pd['pheno'])
+            return(values_df_pd)
         out = open(outfile, 'w')
         out.write("accessionid,pheno\n")
         for a_ind in range(len(self.accessions)):
