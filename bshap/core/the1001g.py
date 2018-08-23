@@ -127,12 +127,12 @@ class HDF51001gTable(object):
         if name not in ['chr', 'start', 'end', 'value']:
             raise AttributeError("%s is not in the keys for HDF5. Only accepted values are ['chr', 'start', 'end', 'value']" % name)
         if filter_pos_ix is None:
-            return(self.h5file[str(name)])
+            return(np.array(self.h5file[str(name)]).astype('U13'))
         elif type(filter_pos_ix) is np.ndarray:
             rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+            return(np.array(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix]).astype('U13'))
         else:
-            return(self.h5file[str(name)][filter_pos_ix])
+            return(np.array(self.h5file[str(name)][filter_pos_ix]).astype('U13'))
 
     def get_bed_df(self, filter_pos_ix, return_str = False):
         req_chr = self.__getattr__('chr', filter_pos_ix)
@@ -145,7 +145,7 @@ class HDF51001gTable(object):
     def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
         region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
-        chr_inds = np.where(np.array(self.chr) == region_bed[0])[0]
+        chr_inds = np.where(self.__getattr__('chr') == region_bed[0])[0]
         chr_df = self.get_bed_df(chr_inds)
         if g is None:
             chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
@@ -162,7 +162,7 @@ class HDF51001gTable(object):
     def get_inds_matching_region(self, region_bed):
         # returns values given region_bed (a pd dataframe with chr, start and end)
         ## maybe useful for wma hdf5 files
-        chr_inds = np.where(self.__getattr__("chr", None) == region_bed[0])[0]
+        chr_inds = np.where(np.char.decode(np.array(self.__getattr__("chr", None))) == region_bed[0])[0]
         chr_start = self.__getattr__("start", chr_inds)
         chr_end = self.__getattr__("end", chr_inds)
         return(np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0])
