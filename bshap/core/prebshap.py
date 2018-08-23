@@ -13,7 +13,6 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Align import MultipleSeqAlignment
 from Bio import AlignIO
-from sklearn.cluster import KMeans
 import json
 from . import meth5py
 
@@ -307,6 +306,7 @@ def countTypeFreqs(type_cls):
     return type_counts,type_freqs
 
 def clusteringReads(binmeth_whole, n_clusters=8):
+    from sklearn.cluster import KMeans
     init_cls = np.array(((0,0,0),(1,0,0),(0,1,0), (0,0,1), (1,1,0), (1,0,1), (0,1,1), (1,1,1)), dtype=float)
     try:    ### This is a very dangerous conditional statement to put
         binmeth_fiter = np.array(binmeth_whole)[:,[2,4,6]]  ## filter for columns from thw binmeth_whole
