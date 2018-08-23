@@ -13,7 +13,7 @@ from Bio import AlignIO
 from subprocess import Popen, PIPE
 import shlex
 
-import prebshap
+from . import prebshap
 
 log = logging.getLogger(__name__)
 

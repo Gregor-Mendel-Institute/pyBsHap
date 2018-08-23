@@ -46,8 +46,8 @@ def get_reverse_complement(seq):
 def findIntersectbed(bin_bed, map_bed):
     # bin_bed = [290605, 290688]
     # map_bed = [290626,290711]
-    bin_bed_arr = np.array(range(bin_bed[0], bin_bed[1]))
-    map_bed_arr = np.array(range(map_bed[0], map_bed[1]))
+    bin_bed_arr = np.array(list(range(bin_bed[0], bin_bed[1])))
+    map_bed_arr = np.array(list(range(map_bed[0], map_bed[1])))
     intersect_bed_arr = np.sort(np.intersect1d(bin_bed_arr, map_bed_arr))
     intersect_bed = [intersect_bed_arr[0], intersect_bed_arr[-1]+1]
     return(intersect_bed)
@@ -102,7 +102,7 @@ def getHighlightedSeqs(refseq, rseq, strand):
 
 def getMatchedSeq(binread, tair10, bin_bed):
     intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
-    bin_positions = np.where(np.in1d(binread.get_reference_positions(), range(intersect_bed[0], intersect_bed[1])))[0]
+    bin_positions = np.where(np.in1d(binread.get_reference_positions(), list(range(intersect_bed[0], intersect_bed[1]))))[0]
     refseq = ''
     rseq = ''
     for ind in bin_positions:
@@ -169,7 +169,7 @@ def getMethWind(inBam, tair10, required_bed, meths = '', strand = '0'):
     binLen = required_bed[3]
     read_length_thres = binLen/2
     bin_start = required_bed[1] - (required_bed[1] % binLen)
-    estimated_bins = range(bin_start, required_bed[2], binLen)
+    estimated_bins = list(range(bin_start, required_bed[2], binLen))
     #dt = h5py.special_dtype(vlen=np.dtype('float16'))
     #reqmeths = meths.create_dataset(required_bed[0],compression="gzip", shape = (len(estimated_bins),4,), dtype=dt)
     #meths[required_bed[0]].attrs['positions'] = estimated_bins
@@ -190,7 +190,7 @@ def getMethWind(inBam, tair10, required_bed, meths = '', strand = '0'):
             if filterRead(binread):
                 continue
             intersect_bed = findIntersectbed(bin_bed[1:3], [binread.reference_start, binread.reference_end])
-            intersect_len = len(range(intersect_bed[0], intersect_bed[1]))
+            intersect_len = len(list(range(intersect_bed[0], intersect_bed[1])))
             rseq_record = getSeqRecord(binread, tair10, bin_bed, intersect_bed) ## No need to check for the overlap to print the alignment
             if intersect_len > read_length_thres:  ## To print the read only in one window.
                 permeths = getMethRead(tair10, binread) ## taking the first and last
@@ -384,7 +384,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
     window_size = required_bed[3]
     read_length_thres = window_size/2
     bin_start = required_bed[1] - (required_bed[1] % window_size)
-    estimated_bins = range(bin_start, required_bed[2], window_size)
+    estimated_bins = list(range(bin_start, required_bed[2], window_size))
     progress_bins = 0
     #### iter meths in the required bed.
     meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
@@ -408,7 +408,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
         else:
             frac_mhl = mhl_value
         if outstat == '':
-            print("%s,%s,%s,%s,%s,%s" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
+            print(("%s,%s,%s,%s,%s,%s" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins)))
         else:
             outstat.write("%s,%s,%s,%s,%s,%s\n" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
         if progress_bins % 1000 == 0:

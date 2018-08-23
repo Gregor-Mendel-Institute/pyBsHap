@@ -488,7 +488,7 @@ def methylation_average_required_bed(meths, required_bed, outmeths_avg, category
     elif outmeths_avg is not None:
         outmeths_avg.write("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1], required_bed[2], req_meth_avg))
     else:
-        print("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1] + 1, required_bed[2], req_meth_avg))
+        print(("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1] + 1, required_bed[2], req_meth_avg)))
 
 def potatoskin_methylation_averages(args):
     # bin_bed = Chr1,1,100

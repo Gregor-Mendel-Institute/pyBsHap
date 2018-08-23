@@ -36,7 +36,7 @@ def get_filter_bed_ix(bed_file, input_bed, just_names=True, araport11_file=None)
     inBed = pybed.BedTool.from_dataframe(input_bed.iloc[:,[0,1,2]])
     ## Just taking first three columns for bedtools
     union_pyBed = inBed.intersect(req_bed, wa=True)
-    if union_pyBed.count() == 0:   ## Return if there are no matching lines. 
+    if union_pyBed.count() == 0:   ## Return if there are no matching lines.
         return(None)
     unionBed = union_pyBed.to_dataframe() ## wa is to return the entire bed.
     total_cols = np.array(input_bed.iloc[:,0] + "," + input_bed.iloc[:,1].map(str) + "," +  input_bed.iloc[:,2].map(str), dtype="str")
@@ -54,7 +54,7 @@ def get_filter_pos_echr(bed_file, chrid, common_positions, just_names = True, ar
         req_name_pos = req_name_pos.loc[req_name_pos[0] == chrid]
     for e_ind, e_pos in req_name_pos.iterrows():
         pos_inds = np.searchsorted(common_positions,[e_pos[1],e_pos[2]], side='right')
-        filter_inds.extend(range(pos_inds[0],pos_inds[1]))
+        filter_inds.extend(list(range(pos_inds[0],pos_inds[1])))
         #color_scatter[pos_inds[0]:pos_inds[1]] = replace_to
     return(np.array(filter_inds))
 
@@ -86,8 +86,7 @@ def get_weighted_average(feature):
     """
     Parsing the output of bedtools to get weighted average
     """
-    if len(feature) < 6:
-        raise(NotImplementedError, "the bed file provided should have atleast 3 columns")
+    assert len(feature) < 6
     if feature[-3] != '.':
         if int(feature[-3]) > 0:
             num_c = np.sum(np.array(feature[-2].split(","), dtype=int) * np.array(feature[-2].split(","), dtype=float))

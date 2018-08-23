@@ -40,7 +40,7 @@ class ArabidopsisGenome(object):
         real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.chrs ] )
         try:
             return(np.where(real_chrs == echr_num)[0][0])
-        except IndexError, err_idx:
+        except IndexError as err_idx:
             return(None)
 
     def get_genomewide_inds(self, df_str):
@@ -70,8 +70,8 @@ def read_bg_file(bg_file):
     sniffer = csv.Sniffer()
     t_ef = open(bg_file, 'rb')
     ifheader = sniffer.has_header(t_ef.read(4096))
-    t_ef.next() #### need to do this so that we get entire line in the next read
-    delimiter = sniffer.sniff(t_ef.next()).delimiter
+    next(t_ef) #### need to do this so that we get entire line in the next read
+    delimiter = sniffer.sniff(next(t_ef)).delimiter
     if ifheader:
         e_bg = pd.read_table(bg_file, header = 0, sep= delimiter)
     else:

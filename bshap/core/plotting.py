@@ -23,17 +23,17 @@ def meths_jointplot(x, y, reqcond, filter_pos=False, kde=True, hexplt=False):
         filter_inds = np.where(x + y > 0)[0]
         x = x[filter_inds]
         y = y[filter_inds]
-    if not reqcond.has_key('color'):
+    if 'color' not in reqcond:
         reqcond['color'] = "#43a2ca"
-    if not reqcond.has_key('xlab'):
+    if 'xlab' not in reqcond:
         reqcond['xlab'] = ''
-    if not reqcond.has_key('ylab'):
+    if 'ylab' not in reqcond:
             reqcond['ylab'] = ''
-    if not reqcond.has_key('plt_limits'):
+    if 'plt_limits' not in reqcond:
         reqcond['plt_limits'] = (-0.05, 1.05)
     sns.set(style="white", color_codes=True)
     if kde:
-        if reqcond.has_key('size'):
+        if 'size' in reqcond:
             p = sns.jointplot(x = x, y = y, kind = "kde", joint_kws={'gridsize':reqcond['size']}, color=reqcond['color'])
         else:
             p = sns.jointplot(x = x, y = y, kind = "kde", color=reqcond['color'])
@@ -41,17 +41,17 @@ def meths_jointplot(x, y, reqcond, filter_pos=False, kde=True, hexplt=False):
         _ = p.ax_marg_y.hist(p.y, bins = np.linspace(reqcond['plt_limits'][0], reqcond['plt_limits'][1], 20), orientation="horizontal", color = reqcond['color'])
     else:
         if hexplt:
-            if reqcond.has_key('size'):
+            if 'size' in reqcond:
                 p = sns.jointplot(x = x, y = y, kind="hex", color = reqcond['color'], joint_kws={'gridsize':reqcond['size']})
             else:
                 p = sns.jointplot(x = x, y = y, kind="hex", color = reqcond['color'])
         else:
-            if reqcond.has_key('size'):
+            if 'size' in reqcond:
                 p = sns.jointplot(x = x, y = y, kind = "scatter", joint_kws={"s": reqcond['size']}, alpha = 0.1, color=reqcond['color'])
             else:
                 p = sns.jointplot(x = x, y = y, kind = "scatter", alpha = 0.1, color=reqcond['color'])
     p.set_axis_labels(reqcond['xlab'], reqcond['ylab'])
-    if reqcond.has_key('annotate'):
+    if 'annotate' in reqcond:
         t_anno = "%s; npts: %s" % (reqcond['annotate'], len(p.x))
         p = p.annotate(stats.pearsonr, template="%s" % t_anno, fontsize=12)
     else:

@@ -54,7 +54,7 @@ def callMPs(bsMethPer, bstC, error_rate, alternative="greater", window=300000):
     pVal = npBinomTest(bsMethPer[i:i+window], bstC[i:i+window], error_rate, alternative=alternative)
     bsPval = np.append(bsPval, pVal)
     log.info("progress: %s positions" % (i + window))
-  return bsPval
+  return(bsPval)
 
 def callMPs_allcbed(allcBed, alternative="greater", window=300000):
   bsPval = np.zeros(0,dtype=float)
@@ -76,7 +76,7 @@ def getconv_rate_allc(allcFile):
     non_conversion = total_unconverted_c / float(total_bases)
     conv_rate = 1 - non_conversion
     log.info("Conversion rate estimated from %s is: %s" % (allcFile, conv_rate))
-    return conv_rate
+    return(conv_rate)
 
 def getConvRate_mpipleup(path_to_allc, sample_id, control="ChrC"):
     ## Copied this code from methylpy to get the Conversion rate and error rate
@@ -121,7 +121,7 @@ def getConvRate_mpipleup(path_to_allc, sample_id, control="ChrC"):
     log.info("\tThe non-conversion rate is "+str(non_conversion*100)+"%")
     log.info("\tThe estimated sequencing error rate is: "+str(seq_error))
     conv_rate = 1 - non_conversion
-    return (conv_rate, seq_error)
+    return(conv_rate, seq_error)
 
 def writeBED(bsCHROM, bsPOS, bsCONTEXT, bstC, bsMethPer, bsPval, bsSTRAND, outBED):
   out = open(outBED, 'w')
@@ -161,12 +161,12 @@ def getChrs_allc(allcFile):
     inds = np.core.defchararray.rfind(np.array(bsbed['chr'], dtype="string"),'Chr')
     if np.unique(inds)[0] >= 0:
         chrs = ["Chr1", "Chr2", "Chr3", "Chr4", "Chr5"]
-        return chrs
+        return(chrs)
     inds = np.core.defchararray.rfind(np.array(bsbed['chr'], dtype="string"),'chr')
     if np.unique(inds)[0] >= 0:
         chrs = ["chr1", "chr2", "chr3", "chr4", "chr5"]
-        return chrs
-    return ["1", "2", "3", "4", "5"]
+        return(chrs)
+    return(["1", "2", "3", "4", "5"])
 
 def methylpy_dmrfind(args):
     region_dict = {}
@@ -177,7 +177,7 @@ def methylpy_dmrfind(args):
     mc_type = args['mc_type'].split(",")
     samples = args['sample_ids'].split(",")
     if args['sample_cat'] == '0':
-        sample_cat=range(0, len(samples))
+        sample_cat= list(range(0, len(samples)))
     else:   ## if samples given some categories
         sample_cat = args['sample_cat'].split(",")
     ### Check which of the samples given have the all c files
@@ -197,7 +197,7 @@ def parseMC_class(mc_class):
         context = ["CHG",1]
     elif mc_class:
         context = ["CHH",2]
-    return context
+    return(context)
 
 def getLowFreqSites(args):
     seq_error = 0.0001
