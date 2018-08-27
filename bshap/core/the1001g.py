@@ -12,6 +12,10 @@ import csv
 import itertools
 import pybedtools as pybed
 
+from . import genome as g
+genome = g.ArabidopsisGenome()
+
+
 log = logging.getLogger(__name__)
 
 def die(msg):
