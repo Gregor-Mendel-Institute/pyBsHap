@@ -4,7 +4,8 @@ import logging
 import h5py as h5
 import numpy as np
 import pandas as pd
-import os.path
+import os
+import os.path as op
 import glob
 import sys
 from . import run_bedtools
@@ -22,16 +23,16 @@ def die(msg):
 
 def get_chrs(allc_id, allc_path):
     #files_present = glob.glob(allc_path + "/allc_" + allc_id + "*tsv")
-    if os.path.isfile(allc_path + "/allc_" + allc_id + "_Chr1.tsv"):
+    if op.isfile(allc_path + "/allc_" + allc_id + "_Chr1.tsv"):
         return(['Chr1','Chr2','Chr3','Chr4','Chr5'])
-    elif os.path.isfile(allc_path + "/allc_" + allc_id + "_1.tsv"):
+    elif op.isfile(allc_path + "/allc_" + allc_id + "_1.tsv"):
         return(['1','2','3','4','5'])
     else:
         die("Either the allc id, %s or allc file path, %s is wrong" % (allc_id, allc_path))
 
 def read_allc_pandas_table(allc_file):
     sniffer = csv.Sniffer()
-    if os.path.splitext(allc_file)[1] == '.gz':  ### For the new allc files
+    if op.splitext(allc_file)[1] == '.gz':  ### For the new allc files
         bsbed = pd.read_table(allc_file, header = None, compression='gzip')
     else:
         allc = open(allc_file, 'rb')
@@ -106,127 +107,10 @@ def generate_H5File(allcBed, chrpositions, outFile):
                 h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]],dtype="S8"), shape=(allcBed.shape[0],),chunks = ((chunk_size,)))
     h5file.close()
 
+
+
 def load_hdf5_methylation_file(hdf5_file, bin_bed=''):
     return HDF5MethTable(hdf5_file, bin_bed)
-
-### This function below is deprecated. migrate to functions below which are more versatile.
-# also permeth now returns -1 which are based on the read_threshold
-def two_meths_commonpos_echr(meths_1, meths_2, chrid, methylated=True, read_threshold=5):
-    req_chr_ind_1, chr_inds_1 = meths_1.get_chrinds(chrid)
-    req_chr_ind_2, chr_inds_2 = meths_2.get_chrinds(chrid)
-    ## Filter the positions based on read_threshold
-    meths_1_creq = chr_inds_1[0] + np.where(meths_1.mc_total[chr_inds_1[0]:chr_inds_1[1]] > read_threshold)[0]
-    meths_2_creq = chr_inds_2[0] + np.where(meths_2.mc_total[chr_inds_2[0]:chr_inds_2[1]] > read_threshold)[0]
-    ## Common positions
-    meths_1_pos = meths_1.get_positions(meths_1_creq)
-    meths_2_pos = meths_2.get_positions(meths_2_creq)
-    common_positions = np.intersect1d(meths_1_pos, meths_2_pos, assume_unique=True)
-    meths_1_creq = meths_1_creq[np.where(np.in1d(meths_1_pos, common_positions, assume_unique=True))[0]]
-    meths_2_creq = meths_2_creq[np.where(np.in1d(meths_2_pos, common_positions, assume_unique=True))[0]]
-    ## Now have to filter out the non methylated positions if present
-    if methylated:
-        meths_1_meth = meths_1.get_methylated(meths_1_creq)
-        meths_2_meth = meths_2.get_methylated(meths_2_creq)
-        get_methylated = np.where(np.sum((meths_1_meth, meths_2_meth), axis = 0) > 0)[0]
-        meths_1_creq = meths_1_creq[get_methylated]
-        meths_2_creq = meths_2_creq[get_methylated]
-    return([meths_1_creq, meths_2_creq])
-
-def two_meths_commonpos(meths_1, meths_2, methylated=True, read_threshold = 5):
-    meths_1_creq = np.zeros(0, dtype=int)
-    meths_2_creq = np.zeros(0, dtype=int)
-    for e_chr in genome.chrs:
-        log.info("reading in through chromosome %s" % e_chr)
-        ind_1, ind_2 = two_meths_commonpos_echr(meths_1, meths_2, e_chr, methylated, read_threshold)
-        meths_1_creq = np.append(meths_1_creq, ind_1)
-        meths_2_creq = np.append(meths_2_creq, ind_2)
-    return([meths_1_creq, meths_2_creq])
-
-# The below function is bit tricky, it gives the positions which are fixed in the files.
-# Problem: In 1001 data, there are only about 700000 cytosines which are fixed. Take care.
-def derive_common_positions_echr(meths_list, chrid):
-    ## Caution: would probably need much memory if you give many files.
-    # meth_list is a list of meths meth5py object read
-    # returns common positions.
-    chrid_ind = meths_list[0].get_chrinds(chrid)[0]
-    common_positions = np.arange(genome.golden_chrlen[chrid_ind], dtype="int")
-    for m in meths_list:
-        m.chrinds = m.get_chrinds(chrid)
-        common_positions = np.intersect1d(common_positions, m.positions[m.chrinds[1][0]:m.chrinds[1][1]], assume_unique = True)
-    ## Now we have common positions, get the indices which are common.
-    for m in meths_list:
-        m_filter_inds = m.chrinds[1][0] + np.where(np.in1d(m.positions[m.chrinds[1][0]:m.chrinds[1][1]], common_positions, assume_unique=True))[0]
-        if m.filter_pos_ix is None:  ## This is to mainly append when checking for all the chromosomes.
-            m.filter_pos_ix = m_filter_inds
-        else:
-            m.filter_pos_ix = np.append(m.filter_pos_ix, m_filter_inds)
-    return(meths_list)
-
-def derive_common_positions(meths_list):
-    ## Here you get all the common positions going in a loop for each chromosome.
-    # It might be some time consuming.
-    for e_chr in genome.chrs:
-        # the function below is appending the list m.filter_pos_ix
-        # So, make sure you have some place in the RAM.
-        log.info("reading in through chromosome %s" % e_chr)
-        derive_common_positions_echr(meths_list, e_chr)
-    log.info("done!")
-    return(meths_list)
-
-def derive_common_context_positions(meths_list):
-    log.info("identifying common positions in meths list")
-    meths_list = derive_common_positions(meths_list)
-    # get 2d np array for all mc_class
-    log.info("getting mc class at common positions")
-    mc_class_meths = [m.get_mc_class(m.filter_pos_ix) for m in meths_list]
-    mc_class_meths = np.array(mc_class_meths)
-    if mc_class_meths.shape[0] == 2:
-        req_pos_ix = np.where(mc_class_meths[0] == mc_class_meths[1])[0]
-    else:
-        req_pos_ix = [len(np.unique(mc_class_meths[:,i])) == 1  for i in range(mc_class_meths.shape[1])]
-        req_pos_ix = np.where(np.array(req_pos_ix))[0]
-    for m in meths_list:
-        m.filter_pos_ix = m.filter_pos_ix[req_pos_ix]
-    log.info("done!")
-    return(meths_list)
-
-
-def write_combined_h5_permeths(meths_list, output_file, read_threshold=0):
-    ### Here the input is a list of meths object all the hdf5 files
-    meths_file_names = np.array([ m.h5file.filename.encode('utf8') for m in meths_list ], dtype="string")
-    len_filter = [ len(m.filter_pos_ix) for m in meths_list ]
-    if not all(x == len_filter[0] for x in len_filter):
-        die("please provide meths_list with corresponding positons in each")
-    log.info("writing the data into h5 file")
-    num_positions = len(meths_list[0].filter_pos_ix)
-    num_lines = len(meths_list)
-    outh5file = h5.File(output_file, 'w')
-    outh5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
-    outh5file.create_dataset('num_lines', data=num_lines, shape=(1,),dtype='i4')
-    outh5file.create_dataset('num_positions', data=num_positions, shape=(1,),dtype='i4')
-    outh5file.create_dataset('file_names', data=meths_file_names, shape=(num_lines,))
-    ## Add chromosome and positions from the first meth files
-    outh5file.create_dataset('pos', compression="lzf", data=meths_list[0].get_positions(meths_list[0].filter_pos_ix), shape=(num_positions,), dtype='i8')
-    outh5file.create_dataset('chr', compression="lzf", data=np.array(meths_list[0].get_chrs_list(meths_list[0].filter_pos_ix), dtype="S8"), shape=(num_positions,))
-    ## Below the file is chunked the same way as a normal meths file. check this
-    outh5file.create_dataset('permeth', shape=(num_positions, num_lines), dtype='float', compression="lzf", chunks=((chunk_size, 1)))
-    outh5file.create_dataset('filter_pos_ix', shape=(num_positions, num_lines), dtype='int', compression="lzf", chunks=((chunk_size, 1)))
-    for i in range(len(meths_list)):
-        outh5file['permeth'][:,i] = meths_list[i].get_permeths(meths_list[i].filter_pos_ix, read_threshold)
-        outh5file['filter_pos_ix'][:,i] = meths_list[i].filter_pos_ix
-    outh5file.close()
-    log.info("done")
-
-def iter_inds(t_inds, chunk_size):
-    result = []
-    for t in t_inds:
-        result.append(t)
-        if len(result) == chunk_size:
-            yield(result)
-            result = []
-    if result:
-        yield(result)
-
 
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
@@ -408,7 +292,7 @@ class HDF5MethTable(object):
 def generate_meths_in_windows(meths, out_file, window_size, category=1, req_context=None):
     ## Methylation category here by default is weighted average
     # look the function below (MethylationSummaryStats).
-    if os.path.isfile(out_file):
+    if op.isfile(out_file):
         die("ouput bedgraph file (%s) is already present" % out_file)
     outmeths_avg = open(out_file, 'w')
     for echr, echrlen in zip(genome.chrs, genome.golden_chrlen):
@@ -503,10 +387,10 @@ def potatoskin_methylation_averages(args):
         log.info("done!")
     else:
         if args['allc_path'] == 'new':
-            outhdf5 = os.path.splitext(os.path.splitext(args['inFile'])[0])[0] + ".hdf5"
+            outhdf5 = op.splitext(op.splitext(args['inFile'])[0])[0] + ".hdf5"
         else:
             outhdf5 = args['allc_path'] + "allc_" + args['inFile'] + ".hdf5"
-        if os.path.isfile(outhdf5):
+        if op.isfile(outhdf5):
             log.info("loading the hdf5 file %s!" % outhdf5)
         else:
             log.info("generating hdf5 file from allc files, %s!" % outhdf5)
