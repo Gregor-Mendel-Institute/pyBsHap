@@ -38,6 +38,10 @@ class CombinedMethsTable(object):
         # returns common positions for a single chromosome
         #from tempfile import mkdtemp
         chrid_ind = genome.get_chr_ind(chrid)
+        echr_pos_ix_file = op.join("chr_%s_inds" % str(chrid_ind + 1))
+        if op.isfile(echr_pos_ix_file + '.npz'):
+            echr_pos_ix = np.load( echr_pos_ix_file + '.npz' )
+            return((echr_pos_ix['common_positions'], echr_pos_ix_file))
         common_positions = np.arange(1, genome.golden_chrlen[chrid_ind] + 1, dtype="int")
         common_positions_scores = np.zeros( len(common_positions), dtype="int8" )
         t_echr_pos_ix = np.repeat(-1, len(common_positions) * self.num_lines).reshape((len(common_positions), self.num_lines))
@@ -50,8 +54,7 @@ class CombinedMethsTable(object):
         ## Now calculate which positions are needed
         req_pos_ix = np.where( common_positions_scores >= perc_nas * self.num_lines )[0]
         common_positions = common_positions[req_pos_ix]
-        echr_pos_ix_file = op.join("chr_%s_inds" % str(chrid_ind + 1))
-        np.save( echr_pos_ix_file, t_echr_pos_ix[req_pos_ix, :] )
+        np.savez( echr_pos_ix_file, common_positions = common_positions, pos_ix = t_echr_pos_ix[req_pos_ix, :] )
         return((common_positions, echr_pos_ix_file ))
 
     def derive_most_common_positions(self, perc_nas = 0.05):
@@ -96,7 +99,7 @@ class CombinedMethsTable(object):
         outh5file.create_dataset('end', compression="lzf", shape=(num_positions,), data = self.common_positions + 1)
         meth_values = outh5file.create_dataset('value', shape = ((num_positions, self.num_lines)), chunks=((chunk_size, self.num_lines)),dtype='int')
         for ef, eg_ix in itertools.izip(self.file_pos_ix, self.common_chrs_inds):
-            t_echr_pos_ix = np.load(ef + '.npy')
+            t_echr_pos_ix = np.load(ef + '.npz')['pos_ix']
             for ef_ix in range(0, eg_ix[1], chunk_size):
                 t_m_values = self.get_methylated_values_pos_ix(t_echr_pos_ix[ef_ix:ef_ix+chunk_size,:])
                 meth_values[eg_ix[0]+ef_ix:eg_ix[0]+ef_ix+t_m_values.shape[0],:] = t_m_values
