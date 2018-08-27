@@ -1,0 +1,54 @@
+# Loading genome data
+import logging
+import numpy as np
+import pandas as pd
+
+
+log = logging.getLogger(__name__)
+
+def getInd_bin_bed(bin_bed, tair10):
+    ## bin_bed = ["Chr1", 1, 1000]
+    bin_s = [int(bin_bed[0].replace("Chr", "")) - 1, int(bin_bed[1]), int(bin_bed[2])]
+    return(tair10.chr_inds[bin_s[0]] + int(( bin_s[1] + bin_s[2] )/2) )
+
+class ArabidopsisGenome(object):
+    ## coordinates for ArabidopsisGenome using TAIR 10
+
+    def __init__(self):
+        self.chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
+        self.real_chrlen = [34964571, 22037565, 25499034, 20862711, 31270811]
+        self.golden_chrlen = [30427671, 19698289, 23459830, 18585056, 26975502]
+        self.chr_inds = np.append(0, np.cumsum(self.golden_chrlen))
+        self.centro_start = [14364752, 3602775, 12674550, 2919690, 11668616]
+        self.centro_end   = [15750321, 3735247, 13674767, 4011692, 12082583]
+        self.cetro_mid = np.add(self.centro_start, self.centro_end)/2
+
+    def get_bed_ids_str(self, **kwargs):
+        for req_name in kwargs:
+            req_bed_df = pd.read_table( kwargs[req_name], header=None )
+            setattr(self, req_name, req_bed_df)
+            setattr(self, req_name + "_str", np.array(req_bed_df.iloc[:,0] + ',' + req_bed_df.iloc[:,1].map(str) + ',' + req_bed_df.iloc[:,2].map(str), dtype="str") )
+
+    def get_chr_ind(self, echr):
+        echr_num = str(echr).replace("Chr", "").replace("chr", "")
+        real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.chrs ] )
+        try:
+            return(np.where(real_chrs == echr_num)[0][0])
+        except IndexError as err_idx:
+            return(None)
+
+    def get_genomewide_inds(self, df_str):
+        ### This is the function to give the indices of the genome when you give a bed file.
+        if type(df_str) is not pd.core.series.Series and type(df_str) is not pd.core.frame.DataFrame:
+            die("please input pandas dataframe or series object")
+        elif type(df_str) is pd.core.series.Series:
+            df_str_np = np.array(df_str, dtype="string")
+            df_str_unique = np.unique(df_str_np, return_inverse=True)
+            df_str_inds = np.array(pd.Series(df_str_unique[0]).str.split(",").apply(getInd_bin_bed, args= (self,) ))
+            return( df_str_inds[df_str_unique[1]] )
+        elif type(df_str) is pd.core.frame.DataFrame:
+            ## here first column is chr and second is position
+            if df_str.shape[1] == 3:
+                df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
+            chrom = np.char.replace(np.core.defchararray.lower(np.array(df_str.iloc[:,0], dtype="string")), "chr", "")
+            return(self.chr_inds[np.array(chrom, dtype=int) - 1] + np.array(df_str.iloc[:,1]) )

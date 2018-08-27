@@ -15,8 +15,8 @@ import itertools
 log = logging.getLogger(__name__)
 
 from . import meth5py
-from . import the1001g
-genome = the1001g.ArabidopsisGenome()
+from . import genome
+genome = genome.ArabidopsisGenome()
 
 
 class CombinedMethsTable(object):

@@ -14,8 +14,8 @@ import itertools
 
 log = logging.getLogger(__name__)
 
-from . import the1001g
-genome = the1001g.ArabidopsisGenome()
+from . import genome
+genome = genome.ArabidopsisGenome()
 
 def die(msg):
   sys.stderr.write('Error: ' + msg + '\n')

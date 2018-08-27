@@ -8,9 +8,8 @@ import logging
 import pandas as pd
 
 log = logging.getLogger(__name__)
-chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
-golden_chrlen = [30427671, 19698289, 23459830, 18585056, 26975502]
-entire_chrslen = [34964571, 22037565, 25499034, 20862711, 31270811]
+from . import genome
+tair10 = genome.ArabidopsisGenome()
 
 def identify_positions_given_names(in_file, araport11_file):
     if araport11_file is None:
@@ -74,7 +73,7 @@ def generate_window_file(window_size, overlap, out_windows):
         return(0)
     log.info("generating a window file: %s" % out_windows)
     outWindow = open(out_windows, 'w')
-    for echr, echrlen in zip(chrs, golden_chrlen):
+    for echr, echrlen in zip(tair10.chrs, tair10.golden_chrlen):
         echr_windows = windows(echrlen, window_size, overlap)
         for ewind in echr_windows:
             outWindow.write('%s\t%s\t%s\n' %(echr, ewind[0], ewind[1]))
@@ -103,7 +102,7 @@ def MethylationSummaryStats(window_file, bedFile, bedtoolsPath, category):
     # Chr1	32	33	CTG	0	+	1	1
     # Chr1	34	35	CAG	1	-	9	18
     genome_out = open("tair10.genome.txt", 'w')
-    for echr, echrlen in zip(chrs, golden_chrlen):
+    for echr, echrlen in zip(tair10.chrs, tair10.golden_chrlen):
         genome_out.write("%s\t%s\n" % (echr, echrlen))
     genome_out.close()
     bedtools_command = 'bedtools map -g tair10.genome.txt -a ' + window_file + ' -b ' + bedFile
