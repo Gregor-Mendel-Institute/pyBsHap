@@ -2,6 +2,7 @@
 import logging
 import numpy as np
 import pandas as pd
+import string
 
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,10 @@ class ArabidopsisGenome(object):
         self.centro_start = [14364752, 3602775, 12674550, 2919690, 11668616]
         self.centro_end   = [15750321, 3735247, 13674767, 4011692, 12082583]
         self.cetro_mid = np.add(self.centro_start, self.centro_end)/2
+
+    def load_genome_fasta(self, fasta_file):
+        from pyfaidx import Fasta
+        self.fasta = Fasta(fasta_file)
 
     def get_bed_ids_str(self, **kwargs):
         for req_name in kwargs:
@@ -52,3 +57,30 @@ class ArabidopsisGenome(object):
                 df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
             chrom = np.char.replace(np.core.defchararray.lower(np.array(df_str.iloc[:,0], dtype="string")), "chr", "")
             return(self.chr_inds[np.array(chrom, dtype=int) - 1] + np.array(df_str.iloc[:,1]) )
+
+    def get_mc_context(self, cid, pos):
+        dnastring_pos = self.fasta[cid][pos:pos+3].seq.encode('ascii').upper()
+        ## make sure you can have to identify strand here
+        dnastring_neg = self.fasta[cid][pos-2:pos+1].seq.encode('ascii').upper()  ## Changed the position, different from forward
+        dnastring_neg = get_reverse_complement(dnastring_neg)
+        if dnastring_pos[0].upper() == 'C' and dnastring_neg[0].upper() != 'C':
+            strand = '0'
+            dnastring = dnastring_pos
+        elif dnastring_pos[0].upper() != 'C' and dnastring_neg[0].upper() == 'C':
+            strand = '1'
+            dnastring = dnastring_neg
+        else:
+            return((dnastring_pos, dnastring_neg, None))
+        if dnastring[1].upper() == 'G':
+            dna_context = ["CG",0]
+        elif dnastring[2].upper() == 'G':
+            dna_context = ["CHG",1]
+        elif dnastring:
+            dna_context = ["CHH",2]
+        return((dnastring, dna_context, strand))
+
+def get_reverse_complement(seq):
+    old_chars = "ACGT"
+    replace_chars = "TGCA"
+    tab = string.maketrans(old_chars,replace_chars)
+    return(seq.translate(tab)[::-1])

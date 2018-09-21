@@ -43,7 +43,7 @@ class CombinedMethsTable(object):
             echr_pos_ix = np.load( echr_pos_ix_file + '.npz' )
             return((echr_pos_ix['common_positions'], echr_pos_ix_file))
         common_positions = np.arange(1, genome.golden_chrlen[chrid_ind] + 1, dtype="int")
-        common_positions_scores = np.zeros( len(common_positions), dtype="int8" )
+        common_positions_scores = np.zeros( len(common_positions), dtype="int16" )
         t_echr_pos_ix = np.repeat(-1, len(common_positions) * self.num_lines).reshape((len(common_positions), self.num_lines))
         for m_ix in range(self.num_lines):
             m = self.meths_list[m_ix]
@@ -97,7 +97,7 @@ class CombinedMethsTable(object):
         outh5file.create_dataset('chr', compression="lzf", shape=(num_positions,), data = common_chrs)
         outh5file.create_dataset('start', compression="lzf", shape=(num_positions,), data = self.common_positions)
         outh5file.create_dataset('end', compression="lzf", shape=(num_positions,), data = self.common_positions + 1)
-        meth_values = outh5file.create_dataset('value', shape = ((num_positions, self.num_lines)), chunks=((chunk_size, self.num_lines)),dtype='int')
+        meth_values = outh5file.create_dataset('value', compression = "lzf", shape = ((num_positions, self.num_lines)), chunks=((chunk_size, self.num_lines)),dtype='int')
         for ef, eg_ix in itertools.izip(self.file_pos_ix, self.common_chrs_inds):
             t_echr_pos_ix = np.load(ef + '.npz')['pos_ix']
             for ef_ix in range(0, eg_ix[1], chunk_size):
@@ -109,3 +109,37 @@ class CombinedMethsTable(object):
             ## generally id is like this allc_SRR3299777.hdf5
         outh5file.close()
         log.info("done")
+
+    def derive_methylated_identical_pos_ix_echr(self, chrid):
+        ## Caution: would probably need much memory if you give many files.
+        # meth_list is a list of meths meth5py object read
+        # returns common positions.
+        chrid_ind = genome.get_chr_ind(chrid)
+        num_positions = genome.golden_chrlen[chrid_ind] - 1
+        common_positions_scores = np.zeros( num_positions, dtype="int16" )
+        t_echr_pos_ix = np.repeat(-1, num_positions * self.num_lines).reshape((num_positions, self.num_lines))
+        for m_ix in range(self.num_lines):
+            m = self.meths_list[m_ix]
+            e_chrinds = m.get_chrinds(chrid)
+            e_chr_pos = m.positions[e_chrinds[1][0]:e_chrinds[1][1]]  ## these are the indices here
+            common_positions_scores[e_chr_pos - 1] = np.add( common_positions_scores[e_chr_pos - 1],  m.get_methylated(np.arange(e_chrinds[1][0], e_chrinds[1][1]) ) )
+            t_echr_pos_ix[e_chr_pos - 1, m_ix] = np.arange(len(e_chr_pos))
+        req_pos_ix = np.where( common_positions_scores > 0 )[0]
+        for m_ix in range(self.num_lines):
+            m = self.meths_list[m_ix]
+            m_filter_inds = t_echr_pos_ix[req_pos_ix, m_ix]
+            if m.filter_pos_ix is None:  ## This is to mainly append when checking for all the chromosomes.
+                m.filter_pos_ix = m_filter_inds
+            else:
+                m.filter_pos_ix = np.append(m.filter_pos_ix, m_filter_inds)
+        ### meths_list now has the filter_pos_ix as a key
+
+    def derive_methylated_identical_pos_ix(self):
+        ## Here you get all the common positions going in a loop for each chromosome.
+        # It might be some time consuming.
+        for e_chr in genome.chrs:
+            # the function below is appending the list m.filter_pos_ix
+            # So, make sure you have some place in the RAM.
+            log.info("reading in through chromosome %s" % e_chr)
+            self.derive_methylated_identical_pos_ix_echr(e_chr)
+        log.info("done!")

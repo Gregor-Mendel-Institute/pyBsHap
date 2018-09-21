@@ -83,12 +83,24 @@ class HDF51001gTable(object):
         if name not in ['chr', 'start', 'end', 'value']:
             raise AttributeError("%s is not in the keys for HDF5. Only accepted values are ['chr', 'start', 'end', 'value']" % name)
         if filter_pos_ix is None:
-            return(np.array(self.h5file[str(name)]).astype('U13'))
+            return(self.h5file[str(name)])
         elif type(filter_pos_ix) is np.ndarray:
             rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(np.array(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix]).astype('U13'))
+            ret_attr = np.array(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            return(np.array(self.h5file[str(name)][filter_pos_ix]).astype('U13'))
+            ret_attr = np.array(self.h5file[str(name)][filter_pos_ix])
+        if name in ['chr']:
+            ret_attr = ret_attr.astype('U13')
+        elif name in ['start', 'end']:
+            ret_attr = ret_attr.astype(int)
+        else:
+            ret_attr = ret_attr.astype(float)
+        return(ret_attr)
+
+    def change_accs_ids(self, sra_table):
+        ## /projects/cegs/rahul/009.1001methylomes.rawdata/final_dataset_1001meths_rawdata.txt
+        sra_table_1001g = pd.read_table(sra_table, header = None)
+        self.accessions = np.array([ str(sra_table_1001g.iloc[:,0][np.where(sra_table_1001g.iloc[:,1] == es)[0][0]]) for es in self.accessions])
 
     def get_bed_df(self, filter_pos_ix, return_str = False):
         req_chr = self.__getattr__('chr', filter_pos_ix)
@@ -142,8 +154,18 @@ class HDF51001gTable(object):
                 out.write("%s,%s\n" % ( self.accessions[a_ind], values_df[a_ind] ))
         out.close()
 
-    def matchAcc_ix(self, accs, return_np=False):
-        acc_ix = [ np.where(self.accessions == i)[0][0] for i in accs]
-        if return_np:
-            return(np.array(acc_ix))
-        return(acc_ix)
+    def get_matching_accs_ix(self, accs, return_np=False):
+        return(matching_accessions_ix(self.accessions, accs, return_np))
+
+
+def matching_accessions_ix(target_accs, accs, return_np=False):
+    acc_ix = []
+    for ea in accs:
+        t_ix = np.where(target_accs == ea)[0]
+        if len(t_ix) == 0:
+            acc_ix.append(None)
+        else:
+            acc_ix.append(t_ix[0])
+    if return_np:
+        acc_ix = np.array(acc_ix)[np.where(np.not_equal(acc_ix, None))[0]].astype("int")
+    return(acc_ix)
