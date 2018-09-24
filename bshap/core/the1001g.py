@@ -79,10 +79,12 @@ class HDF51001gTable(object):
         self.chunk_size = self.h5file['chunk_size'][0]
         self.accessions = np.array(self.h5file['accessions'])
 
-    def __getattr__(self, name, filter_pos_ix=None):
+    def __getattr__(self, name, filter_pos_ix=None, return_np=False):
         if name not in ['chr', 'start', 'end', 'value']:
             raise AttributeError("%s is not in the keys for HDF5. Only accepted values are ['chr', 'start', 'end', 'value']" % name)
         if filter_pos_ix is None:
+            if return_np:
+                return(np.array(self.h5file[str(name)]))
             return(self.h5file[str(name)])
         elif type(filter_pos_ix) is np.ndarray:
             rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
@@ -103,9 +105,9 @@ class HDF51001gTable(object):
         self.accessions = np.array([ str(sra_table_1001g.iloc[:,0][np.where(sra_table_1001g.iloc[:,1] == es)[0][0]]) for es in self.accessions])
 
     def get_bed_df(self, filter_pos_ix, return_str = False):
-        req_chr = self.__getattr__('chr', filter_pos_ix)
-        req_start = self.__getattr__('start', filter_pos_ix)
-        req_end = self.__getattr__('end', filter_pos_ix)
+        req_chr = self.__getattr__('chr', filter_pos_ix, return_np=True)
+        req_start = self.__getattr__('start', filter_pos_ix, return_np=True)
+        req_end = self.__getattr__('end', filter_pos_ix, return_np=True)
         if return_str:
             return(np.array(pd.Series(req_chr).map(str) + ',' + pd.Series(req_start).map(str) + ',' + pd.Series(req_end).map(str), dtype = "str" ))
         return(pd.DataFrame(np.column_stack((req_chr,req_start, req_end)), columns=['chr', 'start', 'end']))
@@ -113,7 +115,7 @@ class HDF51001gTable(object):
     def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
         region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
-        chr_inds = np.where(self.__getattr__('chr') == region_bed[0])[0]
+        chr_inds = np.where(self.__getattr__('chr', return_np=True) == region_bed[0])[0]
         chr_df = self.get_bed_df(chr_inds)
         if g is None:
             chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True).to_dataframe()
