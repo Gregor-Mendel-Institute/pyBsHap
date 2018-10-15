@@ -171,3 +171,31 @@ def matching_accessions_ix(target_accs, accs, return_np=False):
     if return_np:
         acc_ix = np.array(acc_ix)[np.where(np.not_equal(acc_ix, None))[0]].astype("int")
     return(acc_ix)
+
+
+class ContextsHDF51001gTable(object):
+    ### A object for all the hdf5 file for contexts (CG, CHG and CHH)
+
+    def __init__(self, wma_path):
+        self.wma_path = wma_path
+        self.load_files()
+
+    def load_files(self):
+        from glob import glob
+        self.cg = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.hdf5")[0])
+        self.chg = HDF51001gTable(glob(self.wma_path + "/" + "*.CHG.hdf5")[0])
+        self.chh = HDF51001gTable(glob(self.wma_path + "/" + "*.CHH.hdf5")[0])
+        #self.cn = HDF51001gTable(glob(self.wma_path + "/" + "*.CN.hdf5")[0])
+        self.n_cg = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.count*.hdf5")[0])
+        self.n_chg = HDF51001gTable(glob(self.wma_path + "/" + "*.CHG.count*.hdf5")[0])
+        self.n_chh = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.count*.hdf5")[0])
+
+    def get_cg_chg_chh_meths(self, req_gene):
+        ## req_gene = "Chr1,4822439,4824414"
+        ind = self.cg.get_inds_matching_region( [req_gene.split(',')[0], int(req_gene.split(',')[1]), int(req_gene.split(',')[2])] )
+        if len(ind) == 0 or len(ind) > 1:
+            return((None, None))
+        ind = ind[0]
+        t_req_gene = pd.DataFrame( np.column_stack(( self.cg.__getattr__('value', ind), self.chg.__getattr__('value', ind), self.chh.__getattr__('value', ind))), columns=["CG","CHG","CHH"] )
+        t_n_req_gene = pd.DataFrame( np.column_stack(( self.n_cg.__getattr__('value', ind), self.n_chg.__getattr__('value', ind), self.n_chh.__getattr__('value', ind))), columns=["CG","CHG","CHH"] )
+        return((t_req_gene, t_n_req_gene))

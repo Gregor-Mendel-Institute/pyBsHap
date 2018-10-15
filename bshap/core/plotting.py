@@ -61,6 +61,23 @@ def meths_jointplot(x, y, reqcond, filter_pos=False, kde=True, hexplt=False):
     p.ax_marg_y.axis([0, len(p.x)/5, reqcond['plt_limits'][0], reqcond['plt_limits'][1]])
     return(p)
 
+def get_context_limits(max_value, context, cg_thres, chg_thres, chh_thres):
+    if max_value < eval(context + "_thres"):
+        #return((0, eval(context + "_thres")))
+        return((0, 0.2))
+    return((-0.01, max_value ))
+
+def plot_cg_chg_chh(t_req_gene, cg_thres = 0.08, chg_thres = 0.012, chh_thres = 0.015):
+    chh_plt_limits = get_context_limits(max( t_req_gene.iloc[:,2] ), "chh", cg_thres, chg_thres, chh_thres)
+    chg_plt_limits = get_context_limits(max( t_req_gene.iloc[:,1] ), "chg", cg_thres, chg_thres, chh_thres)
+    p1 = sns.jointplot(x = t_req_gene.iloc[:,0], y = t_req_gene.iloc[:,1], stat_func=stats.spearmanr)
+    p1.ax_joint.plot((cg_thres,cg_thres), chg_plt_limits, ':k')
+    p1.ax_joint.plot( (-0.01,max( t_req_gene.iloc[:,0] ) ), (chg_thres,chg_thres), ':k')
+    p2 = sns.jointplot(x = t_req_gene.iloc[:,0], y = t_req_gene.iloc[:,2], stat_func=stats.spearmanr)
+    p2.ax_joint.plot((cg_thres,cg_thres), chh_plt_limits, ':k')
+    p2.ax_joint.plot( (-0.01,max( t_req_gene.iloc[:,0] ) ), (chh_thres,chh_thres), ':k')
+    return((p1, p2))
+
 class SeabornFig2Grid(object):
 
     def __init__(self, seaborngrid, fig,  subplot_spec):
