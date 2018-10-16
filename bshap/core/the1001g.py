@@ -190,12 +190,15 @@ class ContextsHDF51001gTable(object):
         self.n_chg = HDF51001gTable(glob(self.wma_path + "/" + "*.CHG.count*.hdf5")[0])
         self.n_chh = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.count*.hdf5")[0])
 
-    def get_cg_chg_chh_meths(self, req_gene):
-        ## req_gene = "Chr1,4822439,4824414"
-        ind = self.cg.get_inds_matching_region( [req_gene.split(',')[0], int(req_gene.split(',')[1]), int(req_gene.split(',')[2])] )
-        if len(ind) == 0 or len(ind) > 1:
+    def get_filter_inds(self, req_genes_str):
+        ## req_genes_str is a list of all the strings
+        all_strs = self.cg.get_bed_df(filter_pos_ix=None, return_str = True)
+        return(np.where( np.in1d(all_strs, req_genes_str ) )[0])
+
+    def get_cg_chg_chh_meths(self, filter_ind):
+        ## Given list of indices, function outputs average of methylations in three contexts
+        if filter_ind is None or len(filter_ind) == 0:
             return((None, None))
-        ind = ind[0]
-        t_req_gene = pd.DataFrame( np.column_stack(( self.cg.__getattr__('value', ind), self.chg.__getattr__('value', ind), self.chh.__getattr__('value', ind))), columns=["CG","CHG","CHH"] )
-        t_n_req_gene = pd.DataFrame( np.column_stack(( self.n_cg.__getattr__('value', ind), self.n_chg.__getattr__('value', ind), self.n_chh.__getattr__('value', ind))), columns=["CG","CHG","CHH"] )
+        t_req_gene = pd.DataFrame( np.column_stack(( np.nanmean(self.cg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.chg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.chh.__getattr__('value', filter_ind), axis = 0))), columns=["CG","CHG","CHH"] )
+        t_n_req_gene = pd.DataFrame( np.column_stack(( np.nanmean(self.n_cg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.n_chg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.n_chh.__getattr__('value', filter_ind), axis = 0))), columns=["CG","CHG","CHH"] )
         return((t_req_gene, t_n_req_gene))
