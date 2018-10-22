@@ -35,18 +35,19 @@ def read_bg_file(bg_file):
     e_bg.columns = np.array(['chr','start','end','value'])
     return(e_bg)
 
-chunk_size = 1000
-def generate_h5_1001g(bg_files, outH5file):
+def generate_h5_1001g(bg_files, outH5file, chunk_size=1000):
     ## Make sure you have exactly same number of lines in all the files
     num_lines = len(bg_files)
     log.info("writing a h5 file for %s bdg files into %s" % (num_lines, outH5file))
     h5file = h5.File(outH5file, 'w')
-    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     h5file.create_dataset('files', data=np.array(bg_files), shape=(num_lines,))
     h5file.create_dataset('accessions', shape= ((num_lines,)), dtype='S20')
     base_bg = read_bg_file(bg_files[0])
     h5file['accessions'][0] = os.path.basename(bg_files[0]).split(".")[1]
     n_rows = base_bg.shape[0]
+    if n_rows < chunk_size:
+        chunk_size = n_rows
+    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     h5file.create_dataset('value', shape = ((n_rows, num_lines)), chunks=((chunk_size,num_lines)),dtype='float')
     for ef_ind in range(num_lines - 1):
         e_bg = read_bg_file(bg_files[ef_ind + 1])
@@ -114,6 +115,11 @@ class HDF51001gTable(object):
 
     def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
+        ## or region_bed = "Chr1,3631,5899"
+        if isinstance(region_bed, basestring):
+            t_split = region_bed.split(",")
+            assert len(t_split) == 3
+            region_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
         region_bedpy = pybed.BedTool('%s %s %s' % (region_bed[0], region_bed[1], region_bed[2]), from_string=True)
         chr_inds = np.where(self.__getattr__('chr', return_np=True) == region_bed[0])[0]
         chr_df = self.get_bed_df(chr_inds)
@@ -132,6 +138,12 @@ class HDF51001gTable(object):
     def get_inds_matching_region(self, region_bed):
         # returns values given region_bed (a pd dataframe with chr, start and end)
         ## maybe useful for wma hdf5 files
+        ## region_bed = ['Chr1',3631, 5899]
+        ## or region_bed = "Chr1,3631,5899"
+        if isinstance(region_bed, basestring):
+            t_split = region_bed.split(",")
+            assert len(t_split) == 3
+            region_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
         chr_inds = np.where(np.char.decode(np.array(self.__getattr__("chr", None))) == region_bed[0])[0]
         chr_start = self.__getattr__("start", chr_inds)
         chr_end = self.__getattr__("end", chr_inds)

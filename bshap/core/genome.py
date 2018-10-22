@@ -58,6 +58,24 @@ class ArabidopsisGenome(object):
             chrom = np.char.replace(np.core.defchararray.lower(np.array(df_str.iloc[:,0], dtype="string")), "chr", "")
             return(self.chr_inds[np.array(chrom, dtype=int) - 1] + np.array(df_str.iloc[:,1]) )
 
+    def iter_windows_echr(self, echr, window_size, overlap=0):
+        chr_ind = self.get_chr_ind(echr)
+        if overlap >= window_size:
+            raise(NotImplementedError)
+        if overlap > 0:
+            for x in range(1, self.golden_chrlen[chr_ind], overlap):
+                yield([x, x + window_size - 1])
+        else:
+            for x in range(1, self.golden_chrlen[chr_ind], window_size):
+                yield([x, x + window_size - 1])
+
+    def iter_windows(self, window_size, overlap=0):
+        for echr, echrlen in zip(self.chrs, self.golden_chrlen):
+            echr_windows = self.iter_windows_echr(echr, window_size, overlap)
+            for ewin in echr_windows:
+                yield([echr, ewin[0], ewin[1]])
+
+
     def get_mc_context(self, cid, pos):
         dnastring_pos = self.fasta[cid][pos:pos+3].seq.encode('ascii').upper()
         ## make sure you can have to identify strand here
