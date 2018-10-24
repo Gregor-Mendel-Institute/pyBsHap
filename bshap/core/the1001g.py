@@ -129,7 +129,7 @@ class HDF51001gTable(object):
             chr_intersect_df = pybed.BedTool.from_dataframe(chr_df).intersect(region_bedpy, wa=True, sorted = True, g = g ).to_dataframe()
         chr_intersect_str = np.array(chr_intersect_df.iloc[:,0] + "," + chr_intersect_df.iloc[:,1].map(str) + "," +  chr_intersect_df.iloc[:,2].map(str), dtype="str")
         chr_str = np.array(chr_df.iloc[:,0].map(str) + ',' + chr_df.iloc[:,1].map(str) + ',' + chr_df.iloc[:,2].map(str), dtype = "str" )
-        return(np.where( np.in1d( chr_str, chr_intersect_str ) )[0])
+        return(np.where( np.in1d( chr_str, chr_intersect_str ) )[0] + chr_inds[0])
 
     def get_inds_overlap_region_file(self, region_file, just_names=False, araport11_file=None):
         whole_bed = self.get_bed_df(None)
