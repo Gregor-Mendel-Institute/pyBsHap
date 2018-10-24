@@ -75,6 +75,20 @@ class ArabidopsisGenome(object):
             for ewin in echr_windows:
                 yield([echr, ewin[0], ewin[1]])
 
+    def estimated_cM_distance(self, snp_position):
+        ## snp_position = "Chr1,150000" or "Chr1,1,300000"
+        # Data based on
+        #Salome, P. A., Bomblies, K., Fitz, J., Laitinen, R. A., Warthmann, N., Yant, L., & Weigel, D. (2011)
+        #The recombination landscape in Arabidopsis thaliana F2 populations. Heredity, 108(4), 447-55.
+        assert isinstance(snp_position, basestring)
+        assert len(snp_position.split(",")) >= 2
+        if len(snp_position.split(",")) == 2:
+            snp_position = [snp_position.split(",")[0], int(snp_position.split(",")[1])]
+        elif len(snp_position.split(",")) == 3:
+            snp_position = [snp_position.split(",")[0], (int(snp_position.split(",")[1]) + int(snp_position.split(",")[2])) / 2 ]
+        mean_recomb_rates = [3.4, 3.6, 3.5, 3.8, 3.6]  ## cM/Mb
+        chr_ix = self.get_chr_ind( snp_position[0] )
+        return( mean_recomb_rates[chr_ix] * snp_position[1] / 1000000 )
 
     def get_mc_context(self, cid, pos):
         dnastring_pos = self.fasta[cid][pos:pos+3].seq.encode('ascii').upper()

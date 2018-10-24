@@ -13,7 +13,7 @@ from bshap.core import prebshap
 from bshap.core import bsseq
 from bshap.core import bamEdit
 from bshap.core import meth5py
-from bshap.core import plotting
+from bshap.core import the1001g
 import logging, logging.config
 
 __version__ = '1.1.0'
@@ -60,6 +60,12 @@ def get_options(program_license,program_version_message):
     mhlparser.add_argument("-o", "--output", dest="outFile", help="Output file", default="STDOUT")
     mhlparser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     mhlparser.set_defaults(func=bshap_mhlcalc)
+
+    t1001gparser = subparsers.add_parser('generate_h5_1001g', help="generate hdf5 file for input bed files and values.")
+    t1001gparser.add_argument("-i", dest="file_paths", nargs='+', help="input bed files containing float variables. You can also provide paths using bash")
+    t1001gparser.add_argument("-o", dest="output_file", help="output h5 file")
+    t1001gparser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+    t1001gparser.set_defaults(func=generate_hdf5)
 
     permeth_parser = subparsers.add_parser('methylation_percentage', help="Get methylation percentage on the given bin position.")
     permeth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files", required=True)
@@ -151,6 +157,10 @@ def mergeallc(args):
     log.info("done!")
     meths_list = meth5py.derive_common_context_positions(meths_list)
     meth5py.write_combined_h5_permeths(meths_list, args['outFile'], read_threshold=args['read_threshold'])
+
+def generate_hdf5(args):
+    log.info("reading %s input files" % len(args['file_paths']))
+    the1001g.generate_h5_1001g(args['file_paths'], args['output_file'])
 
 def bshap_modifybam(args):
     checkARGs(args)

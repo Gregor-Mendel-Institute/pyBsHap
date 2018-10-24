@@ -74,10 +74,16 @@ class PlotMethylationContexts(object):
     def plot_cg_chg_chh(self, color = "#74a9cf"):
         chh_plt_limits = get_context_limits(max( self.meths.iloc[:,2] ), "chh", self._cg_thres, self._chg_thres, self._chh_thres)
         chg_plt_limits = get_context_limits(max( self.meths.iloc[:,1] ), "chg", self._cg_thres, self._chg_thres, self._chh_thres)
-        p1 = sns.jointplot(x = self.meths.iloc[:,0], y = self.meths.iloc[:,1], stat_func=stats.spearmanr, color = color)
+        if isinstance(color, basestring):
+            p1 = sns.jointplot(x = self.meths.iloc[:,0], y = self.meths.iloc[:,1], stat_func=stats.spearmanr, color = color)
+            p2 = sns.jointplot(x = self.meths.iloc[:,0], y = self.meths.iloc[:,2], stat_func=stats.spearmanr, color = color)
+        else:
+            p1 = sns.jointplot(x = self.meths.iloc[:,0], y = self.meths.iloc[:,1], stat_func=stats.spearmanr, scatter = True, color = None)
+            p1.ax_joint.scatter(x = self.meths.iloc[:,0], y = self.meths.iloc[:,1], c = pd.Series(color))
+            p2 = sns.jointplot(x = self.meths.iloc[:,0], y = self.meths.iloc[:,2], stat_func=stats.spearmanr, scatter = True, color = None)
+            p2.ax_joint.scatter(x = self.meths.iloc[:,0], y = self.meths.iloc[:,2], c = pd.Series(color))
         p1.ax_joint.plot((self._cg_thres,self._cg_thres), chg_plt_limits, ':k')
         p1.ax_joint.plot( (-0.01,max( self.meths.iloc[:,0] ) ), (self._chg_thres,self._chg_thres), ':k')
-        p2 = sns.jointplot(x = self.meths.iloc[:,0], y = self.meths.iloc[:,2], stat_func=stats.spearmanr, color = color)
         p2.ax_joint.plot((self._cg_thres,self._cg_thres), chh_plt_limits, ':k')
         p2.ax_joint.plot( (-0.01,max( self.meths.iloc[:,0] ) ), (self._chh_thres,self._chh_thres), ':k')
         self.p1 = p1
