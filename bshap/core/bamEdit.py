@@ -2,14 +2,7 @@ import pysam
 from pyfaidx import Fasta
 import logging
 import numpy as np
-import re
-import string
 import os.path, sys
-from Bio.Alphabet import generic_dna
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-from Bio.Align import MultipleSeqAlignment
-from Bio import AlignIO
 from subprocess import Popen, PIPE
 import shlex
 

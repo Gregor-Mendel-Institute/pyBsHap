@@ -197,10 +197,11 @@ class ContextsHDF51001gTable(object):
         self.cg = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.hdf5")[0])
         self.chg = HDF51001gTable(glob(self.wma_path + "/" + "*.CHG.hdf5")[0])
         self.chh = HDF51001gTable(glob(self.wma_path + "/" + "*.CHH.hdf5")[0])
-        #self.cn = HDF51001gTable(glob(self.wma_path + "/" + "*.CN.hdf5")[0])
         self.n_cg = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.count*.hdf5")[0])
         self.n_chg = HDF51001gTable(glob(self.wma_path + "/" + "*.CHG.count*.hdf5")[0])
-        self.n_chh = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.count*.hdf5")[0])
+        self.n_chh = HDF51001gTable(glob(self.wma_path + "/" + "*.CHH.count*.hdf5")[0])
+        if len( glob(self.wma_path + "/" + "*.CN.hdf5") ) > 0:
+            self.cn = HDF51001gTable(glob(self.wma_path + "/" + "*.CN.hdf5")[0])
 
     def get_filter_inds(self, req_genes_str):
         ## req_genes_str is a list of all the strings
@@ -213,4 +214,22 @@ class ContextsHDF51001gTable(object):
             return((None, None))
         t_req_gene = pd.DataFrame( np.column_stack(( np.nanmean(self.cg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.chg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.chh.__getattr__('value', filter_ind), axis = 0))), columns=["CG","CHG","CHH"] )
         t_n_req_gene = pd.DataFrame( np.column_stack(( np.nanmean(self.n_cg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.n_chg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.n_chh.__getattr__('value', filter_ind), axis = 0))), columns=["CG","CHG","CHH"] )
+        t_req_gene = t_req_gene.set_index( self.cg.accessions )
+        t_n_req_gene = t_n_req_gene.set_index( self.cg.accessions )
         return((t_req_gene, t_n_req_gene))
+
+    def get_meths_req_gene(self, req_gene_ix, context_ix = 0, count_thres=10):
+        ##  For a given gene return a pandas dataframe methylation and number of cytosine counts
+        ## req_genes_str = ["Chr1,10319732,10320402"]
+        ## context_ix == 0 ? CG, context_ix == 1 ? CHG, context_ix == 2 ? CHH
+        (t_req_gene, t_n_req_gene) = self.get_cg_chg_chh_meths( np.array([req_gene_ix], dtype=int) )
+        t_req_gene = t_req_gene.iloc[:, context_ix]
+        t_n_req_gene = t_n_req_gene.iloc[:, context_ix]
+        t_req_gene[ np.where( t_n_req_gene < count_thres )[0] ] = np.nan
+        return(t_req_gene)
+
+    def iterate_meths_req_genes(self, req_genes_str, context_ix=0):
+        ## req_genes_str = ["Chr1,10319732,10320402"]
+        req_genes_ix = self.get_filter_inds(req_genes_str)
+        for egene_ix in req_genes_ix:
+            yield( self.get_meths_req_gene(egene_ix, context_ix ) )
