@@ -77,7 +77,11 @@ def generage_h5file_from_allc(allc_id, allc_path, outFile, pval_thres=0.01):
         allcBed_new = pd.DataFrame(columns = allcBed.columns)
         chrpositions = np.zeros(1, dtype="int")
         log.info("sorting the bed file!")
-        for ec in genome.chrs:
+        sample_chrs = np.sort(np.unique(allcBed['chr']).astype("string"))
+        sample_chrs_ix = [ genome.get_chr_ind(ec) for ec in sample_chrs ]
+        if len(np.where(np.isfinite(np.array(sample_chrs_ix, dtype="float")))[0]) != len(genome.chrs):
+            log.warn("The chromosome IDs do not match the tair IDs. Please check the file if they are suppposed to.")
+        for ec in sample_chrs:
             allcBed_echr = allcBed.iloc[np.where(allcBed.iloc[:,0] == ec)[0], :]
             allcBed_new = allcBed_new.append(allcBed_echr.iloc[np.argsort(np.array(allcBed_echr.iloc[:,1], dtype=int)), :] , ignore_index=True)
             chrpositions = np.append(chrpositions, chrpositions[-1] + allcBed_echr.shape[0])
