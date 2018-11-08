@@ -99,7 +99,7 @@ def generate_H5File(allcBed, chrpositions, outFile):
     h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
     h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
     allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total', 'methylated']
-    allc_dtypes = ['S8', 'int', 'S4', 'S8', 'int', 'int', 'int8']
+    allc_dtypes = ['S16', 'int', 'S4', 'S8', 'int', 'int', 'int8']
     ## Going through all the columns
     for cols, coltype in zip(allc_columns, allc_dtypes):
         h5file.create_dataset(cols, compression="gzip", data=np.array(allcBed[cols],dtype=coltype), shape=(allcBed.shape[0],), chunks = ((chunk_size,)))
@@ -123,88 +123,69 @@ class HDF5MethTable(object):
         self.h5file = h5.File(hdf5_file,'r')
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
-        self.positions = self.h5file['pos']
-        self.chr = self.h5file['chr']
-        self.methylated = self.h5file['methylated']
-        self.strand = self.h5file['strand']
-        self.mc_class = self.h5file['mc_class']
-        self.mc_count = self.h5file['mc_count']
-        self.mc_total = self.h5file['total']
-
+        self.chrs = self.__getattr__('chr', self.chrpositions[0:-1])
 
     def close_h5file(self):
         if self.h5file is not None:
             self.h5file.close()
 
+    def get_chrinds(self, chrid):
+        chrid_mod = str(chrid).replace("Chr", "").replace("chr", "")
+        real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.chrs ] )
+        req_chr_ind = np.where(real_chrs == chrid_mod)[0]
+        if len( req_chr_ind ) == 0:
+            return( (None, None) )
+        req_chr_ind = req_chr_ind[0]
+        chr_inds = [self.chrpositions[req_chr_ind], self.chrpositions[req_chr_ind + 1]]
+        return((req_chr_ind, chr_inds))
+
     def get_filter_inds(self, bin_bed):
-        # bin_bed = ['Chr1', 0, 100]
+        # bin_bed = ['Chr1', 0, 100] or "Chr1,1,100"
         if bin_bed == '':
             return(None)
-        if len(bin_bed) != 3:
-            die("provide the genomic position as array of length 3. ex., ['Chr1', 0, 100]")
+        if isinstance(bin_bed, basestring):
+            t_split = bin_bed.split(",")
+            assert len(t_split) == 3, "please genomic position as 'Chr1,1,100'"
+            bin_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
+        assert len(bin_bed) == 3, "please genomic position as ['Chr1', 1, 100]"
         req_chr_ind, chr_inds = self.get_chrinds(bin_bed[0])
         if req_chr_ind is None:
             return(np.zeros(0, dtype=int))
         req_inds = chr_inds[0] + np.searchsorted(self.positions[chr_inds[0]:chr_inds[1]], [bin_bed[1],bin_bed[2]], side='right')
         return(np.arange(req_inds[0],req_inds[1]))
 
-    def get_chrs_list(self, filter_pos_ix):
+    def __getattr__(self, name, filter_pos_ix=None, return_np=False):
+        req_names = ['chr', 'position', 'pos', 'positions', 'methylated', 'strand', 'mc_count', 'mc_class', 'total', 'mc_total']
+        if name not in req_names:
+            raise AttributeError("%s is not in the keys for HDF5. Only accepted values are 'chr', 'positions', 'pos', 'methylated', 'strand', 'mc_class', 'total', 'mc_total'" % name)
+        if name in ['total', 'mc_total']:
+            name = 'total'
+        if name in ['pos', 'position', 'positions']:
+            name = 'pos'
         if filter_pos_ix is None:
-            filter_pos_ix = np.arange(len(self.positions))
-        if len(filter_pos_ix) == 0:
-            return(np.zeros(0, dtype="S8"))
-        chr_list = np.zeros(len(filter_pos_ix), dtype="S8")
-        filter_pos_ix = np.array(filter_pos_ix, dtype="int")
-        for echr in genome.chrs:
-            chrinds = self.get_chrinds(echr)
-            chr_list[np.where((filter_pos_ix >= chrinds[1][0]) & (filter_pos_ix < chrinds[1][1]))[0]] = echr
-        return(chr_list)
-
-    def get_positions(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['pos']))
+            if return_np:
+                return(np.array(self.h5file[str(name)]))
+            return(self.h5file[str(name)])
         elif type(filter_pos_ix) is np.ndarray:
-            ### provide a sorted filter_pos_ix
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0] ### Make indices relative to chromosome
-            return(self.h5file['pos'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+            ret_attr = np.array(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
         else:
-            return(self.h5file['pos'][filter_pos_ix])
+            ret_attr = np.array(self.h5file[str(name)][filter_pos_ix])
+        if name in ['chr', 'mc_class', 'strand']:
+            ret_attr = ret_attr.astype('U13')
+        elif name in ['pos', 'total', 'mc_count', 'methylated']:
+            ret_attr = ret_attr.astype(int)
+        return(ret_attr)
 
     def get_bed_df(self, filter_pos_ix, full_bed=False, read_threshold=0):
-        req_pos = self.get_positions(filter_pos_ix)
+        req_chrs = self.__getattr__('chr', filter_pos_ix, return_np=True)
+        req_pos = self.__getattr__('pos', filter_pos_ix, return_np=True)
         if full_bed:
-            conname = self.get_mc_class(filter_pos_ix)
-            strand = self.get_strand(filter_pos_ix)
+            conname = self.__getattr__('mc_class', filter_pos_ix, return_np=True )
+            strand = self.__getattr__('strand', filter_pos_ix, return_np=True)
             permeth = self.get_permeths(filter_pos_ix, read_threshold=read_threshold)
-            return(pd.DataFrame(np.column_stack((self.get_chrs_list(filter_pos_ix),req_pos, req_pos + 1, conname, permeth, strand)), columns=['chr', 'start', 'end', 'mc_class', 'permeth', 'strand']))
-        return(pd.DataFrame(np.column_stack((self.get_chrs_list(filter_pos_ix),req_pos, req_pos + 1)), columns=['chr', 'start', 'end']))
-
-    def get_methylated(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['methylated']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['methylated'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['methylated'][filter_pos_ix])
-
-    def get_strand(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['strand']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['strand'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['strand'][filter_pos_ix])
-
-    def get_mc_class(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['mc_class']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['mc_class'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['mc_class'][filter_pos_ix])
+            return(pd.DataFrame(np.column_stack((req_chrs, req_pos, req_pos + 1, conname, permeth, strand)), columns=['chr', 'start', 'end', 'mc_class', 'permeth', 'strand']))
+        return(pd.DataFrame(np.column_stack((req_chrs, req_pos, req_pos + 1)), columns=['chr', 'start', 'end']))
 
     def get_req_mc_class_ix(self, req_context, filter_pos_ix):
         if req_context is None:
@@ -215,16 +196,7 @@ class HDF5MethTable(object):
         import re
         cor = re.compile(req_context)
         np_vmatch = np.vectorize(lambda x:bool(cor.match(x)))
-        return(np.where(np_vmatch(self.get_mc_class(filter_pos_ix)))[0])
-
-    def get_mc_count(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['mc_count']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['mc_count'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['mc_count'][filter_pos_ix])
+        return(np.where(np_vmatch(self.__getattr__('mc_class', filter_pos_ix, return_np=True )))[0])
 
     def get_lowfreq(self, filter_pos_ix=None):
         if filter_pos_ix is None:
@@ -235,23 +207,14 @@ class HDF5MethTable(object):
         else:
             return(self.h5file['lowfreq'][filter_pos_ix])
 
-    def get_mc_total(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['total']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['total'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['total'][filter_pos_ix])
-
     def get_permeths(self, filter_pos_ix=None, read_threshold=0):
 	# If read_threshold is given
 	#   if methylated then we have a value
 	#   else the value is 0
 	# Else the notation is -1
-        methylated_cs = np.array(self.get_methylated(filter_pos_ix), dtype="float")
-        mc_count = self.get_mc_count(filter_pos_ix)
-        mc_total = self.get_mc_total(filter_pos_ix)
+        methylated_cs = np.array(self.__getattr__('methylated', filter_pos_ix), dtype="float")
+        mc_count = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
+        mc_total = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
         calculated_permeths = np.divide(np.multiply(methylated_cs, mc_count), mc_total)
         if read_threshold == 0:
             return(calculated_permeths)
@@ -263,14 +226,6 @@ class HDF5MethTable(object):
             permeths[new_filter_pos_ix] = calculated_permeths[new_filter_pos_ix]
             return(permeths)
 
-    def get_chrinds(self, chrid):
-        chrpositions = np.append(np.array(self.h5file['chrpositions']), len(self.h5file['pos']))
-        req_chr_ind = genome.get_chr_ind(chrid)
-        if req_chr_ind is None:
-            return( (None, None) )
-        chr_inds = [chrpositions[req_chr_ind], chrpositions[req_chr_ind + 1]]
-        return((req_chr_ind, chr_inds))
-
     def iter_chr_windows(self, chrid, window_size):
         req_chr_ind, chr_inds = self.get_chrinds(chrid)
         return(self.iter_bed_windows([chrid, 1, genome.golden_chrlen[req_chr_ind]], window_size))
@@ -279,7 +234,7 @@ class HDF5MethTable(object):
         ## required_bed = ["Chr1", 1, 100]
         filter_pos_ix = self.get_filter_inds(required_bed)
         if len(filter_pos_ix) > 0:
-            filter_pos = self.get_positions(filter_pos_ix)
+            filter_pos = self.__getattr__('pos', filter_pos_ix, return_np=True)
             ind = 0
             for t in range(required_bed[1], required_bed[2], window_size):
                 result = []
@@ -293,9 +248,42 @@ class HDF5MethTable(object):
                             break
                         ind = ind + 1
 
+    def MethylationSummaryStats(self, filter_pos_ix, category = 1, req_context = None):
+        # meths is already filtered for bin_bed positions
+        if len(filter_pos_ix) == 0:
+            return(np.nan)
+        # Filtering for context
+        if req_context is not None:
+            filter_pos_ix = np.array(filter_pos_ix, dtype=int)[self.get_req_mc_class_ix(req_context, filter_pos_ix)]
+            if len(filter_pos_ix) == 0:
+                return(np.nan)
+        mc_total = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
+        mc_count = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
+        if np.sum(mc_total) == 0:
+            return(np.nan)
+        if category == 1:   # weighted mean
+            methylated_cs = np.where(self.__getattr__('methylated', filter_pos_ix, return_np=True) == 1)[0]
+            return(np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total)))
+        elif category == 2: # fraction of methylated positions
+            methylated = self.__getattr__('methylated', filter_pos_ix, return_np=True)
+            meths_len = np.sum(methylated)
+            return(float(meths_len)/len(filter_pos_ix))
+        elif category == 3: ## absolute means
+            return(np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)))
+        elif category == 4:  ### weighted mean but without making correction for converion.
+            return(np.divide(float(np.sum(mc_count)), np.sum(mc_total)))
+        else:
+            raise(NotImplementedError)
+
+    def AveMethylation_All_Contexts( self, filter_pos_ix, category = 1 ):
+        cg_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "CG[ATGC]" )
+        chg_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "C[ATC]G" )
+        chh_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "C[ATC][ATC]" )
+        return( (cg_meth, chg_meth, chh_meth) )
+
 def generate_meths_in_windows(meths, out_file, window_size, category=1, req_context=None):
     ## Methylation category here by default is weighted average
-    # look the function below (MethylationSummaryStats).
+    # look the function in HDF51001gTable MethylationSummaryStats).
     if op.isfile(out_file):
         die("ouput bedgraph file (%s) is already present" % out_file)
     outmeths_avg = open(out_file, 'w')
@@ -304,7 +292,7 @@ def generate_meths_in_windows(meths, out_file, window_size, category=1, req_cont
         count = 0
         log.info("analyzing %s" % echr)
         for ewin in self_windows:
-            req_meth_avg = MethylationSummaryStats(meths, ewin[1], category, req_context)
+            req_meth_avg = meths.MethylationSummaryStats(ewin[1], category, req_context)
             outmeths_avg.write("%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg))
             count = count + 1
             if count % 1000 == 0:
@@ -340,37 +328,10 @@ def expand_nucleotide_code(mc_type):
                          itertools.product(*[iub_dict[nuc] for nuc in motif])])
     return(set(mc_class))
 
-def MethylationSummaryStats(meths, filter_pos_ix, category, req_context = None):
-    # meths is already filtered for bin_bed positions
-    if len(filter_pos_ix) == 0:
-        return(np.nan)
-    # Filtering for context
-    if req_context is not None:
-        filter_pos_ix = np.array(filter_pos_ix, dtype=int)[meths.get_req_mc_class_ix(req_context, filter_pos_ix)]
-        if len(filter_pos_ix) == 0:
-            return(np.nan)
-    mc_total = meths.get_mc_total(filter_pos_ix)
-    mc_count = meths.get_mc_count(filter_pos_ix)
-    if np.sum(mc_total) == 0:
-        return(np.nan)
-    if category == 1:   # weighted mean
-        methylated_cs = np.where(meths.get_methylated(filter_pos_ix) == 1)[0]
-        return(np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total)))
-    elif category == 2: # fraction of methylated positions
-        methylated = meths.get_methylated(filter_pos_ix)
-        meths_len = np.sum(methylated)
-        return(float(meths_len)/len(filter_pos_ix))
-    elif category == 3: ## absolute means
-        return(np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)))
-    elif category == 4:  ### weighted mean but without making correction for converion.
-        return(np.divide(float(np.sum(mc_count)), np.sum(mc_total)))
-    else:
-        raise(NotImplementedError)
-
 def methylation_average_required_bed(meths, required_bed, outmeths_avg, category):
     ### required_bed = ["Chr1", 1, 1000]
     filter_pos_ix = meths.get_filter_inds(required_bed)
-    req_meth_avg = MethylationSummaryStats(meths, filter_pos_ix, category)
+    req_meth_avg = meths.MethylationSummaryStats(filter_pos_ix, category)
     if outmeths_avg == '':
         return(req_meth_avg)
     elif outmeths_avg is not None:
