@@ -34,6 +34,18 @@ class ArabidopsisGenome(object):
             setattr(self, req_name, req_bed_df)
             setattr(self, req_name + "_str", np.array(req_bed_df.iloc[:,0] + ',' + req_bed_df.iloc[:,1].map(str) + ',' + req_bed_df.iloc[:,2].map(str), dtype="str") )
 
+    def determine_bed_from_araportids(self, name, araportids):
+        assert type(araportids) is pd.core.series.Series, "please provide a pandas series object"
+        assert hasattr(self, name), "please load required bed file using 'get_bed_ids_str' function. ex., ARAPORT11/Araport11_GFF3_genes_201606.bed"
+        bed_str = np.zeros(0, dtype="float")
+        for ei in araportids:
+            t_ind = np.where( self.__getattribute__( name ).iloc[:,3] == ei )[0]
+            if len(t_ind) == 0:
+                bed_str = np.append(bed_str, '')
+            else:
+                bed_str = np.append( bed_str, self.__getattribute__( name + "_str" )[t_ind[0]] )
+        return( bed_str )
+
     def get_chr_ind(self, echr):
         echr_num = str(echr).replace("Chr", "").replace("chr", "")
         real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.chrs ] )
