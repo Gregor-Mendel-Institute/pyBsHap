@@ -237,19 +237,25 @@ class HDF5MethTable(object):
             filter_pos = self.__getattr__('pos', filter_pos_ix, return_np=True)
             ind = 0
             for t in range(required_bed[1], required_bed[2], window_size):
+                skipped = True
                 result = []
                 bin_bed = [int(t), int(t) + window_size - 1]
                 for epos in filter_pos[ind:]:
                     if epos >= bin_bed[0]:
                         if epos <= bin_bed[1]:
                             result.append(filter_pos_ix[ind])
-                        elif epos > bin_bed[1] :
+                        elif epos > bin_bed[1]:
+                            skipped = False
                             yield((bin_bed, result))
                             break
                         ind = ind + 1
+                if skipped:
+                    yield((bin_bed, result))
 
     def MethylationSummaryStats(self, filter_pos_ix, category = 1, req_context = None):
         # meths is already filtered for bin_bed positions
+        if filter_pos_ix is None:
+            return(np.nan)
         if len(filter_pos_ix) == 0:
             return(np.nan)
         # Filtering for context
