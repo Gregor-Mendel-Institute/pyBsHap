@@ -22,53 +22,93 @@ def die(msg):
   sys.stderr.write('Error: ' + msg + '\n')
   sys.exit(1)
 
-def read_bg_file(bg_file):
-    sniffer = csv.Sniffer()
-    t_ef = open(bg_file, 'rb')
-    ifheader = sniffer.has_header(t_ef.read(4096))
-    next(t_ef) #### need to do this so that we get entire line in the next read
-    delimiter = sniffer.sniff(next(t_ef)).delimiter
-    if ifheader:
-        e_bg = pd.read_table(bg_file, header = 0, sep= delimiter)
-    else:
-        e_bg = pd.read_table(bg_file, header = None, sep= delimiter)
-    e_bg.columns = np.array(['chr','start','end','value'])
-    return(e_bg)
+class WriteHDF51001Table(object):
 
-def generate_h5_1001g(bg_files, outH5file, chunk_size=1000):
-    ## Make sure you have exactly same number of lines in all the files
-    num_lines = len(bg_files)
-    log.info("writing a h5 file for %s bdg files into %s" % (num_lines, outH5file))
-    h5file = h5.File(outH5file, 'w')
-    h5file.create_dataset('files', data=np.array(bg_files), shape=(num_lines,))
-    h5file.create_dataset('accessions', shape= ((num_lines,)), dtype='S20')
-    base_bg = read_bg_file(bg_files[0])
-    h5file['accessions'][0] = os.path.basename(bg_files[0]).split(".")[1]
-    n_rows = base_bg.shape[0]
-    if n_rows < chunk_size:
-        chunk_size = n_rows
-    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
-    h5file.create_dataset('value', shape = ((n_rows, num_lines)), chunks=((chunk_size,num_lines)),dtype='float')
-    for ef_ind in range(num_lines - 1):
-        e_bg = read_bg_file(bg_files[ef_ind + 1])
-        h5file['accessions'][ef_ind + 1] = os.path.basename(bg_files[ef_ind + 1]).split(".")[1] ## generally accession is second in the file name, eg., mhl.10001.txt
-        if n_rows == 0:
-            n_rows = e_bg.shape[0]
+    def __init__(self, input_file, output_file, chunk_size=1000):
+        self.chunk_size = chunk_size
+        self.input_file = input_file
+        self.output_file = output_file
+        #self.num_lines = len(input_file)
+
+    @staticmethod
+    def _read_bg_file(bg_file, value_column, delimiter = "\t"):
+        ## Also provide the column which value contains
+        sniffer = csv.Sniffer()
+        t_ef = open(bg_file, 'rb')
+        ifheader = sniffer.has_header(t_ef.read(4096))
+        if ifheader:
+            e_bg = pd.read_table(bg_file, header = 0, sep= delimiter)
         else:
-            if n_rows != e_bg.shape[0]:
-                die("please provide bedgraph files with exactly same number of lines")
-        h5file['value'][:,ef_ind+1] = np.array(e_bg['value'], dtype='float')
-        if ef_ind % 50 == 0 and ef_ind > 0:
-            log.info("written %s files into h5file" % ef_ind)
-    h5file.create_dataset('chr', shape=(n_rows,), data = np.array(base_bg['chr'], dtype='str'))
-    h5file.create_dataset('start', shape=(n_rows,), data = np.array(base_bg['start'], dtype='int'))
-    h5file.create_dataset('end', shape=(n_rows,), data = np.array(base_bg['end'], dtype='int'))
-    h5file['value'][:,0] = np.array(base_bg['value'])
-    h5file.close()
-    log.info("done")
+            e_bg = pd.read_table(bg_file, header = None, sep= delimiter)
+        e_bg.rename(columns={0:'chr',1:'start',2:'end', value_column - 1:'value' }, inplace=True)
+        return(e_bg)
+
+    def write_h5_multiple_files(self, value_column=4):
+        ## self.input_file is an array of files
+        log.info("reading %s input files" % len(self.input_file))
+        num_lines = len(self.input_file)
+        log.info("writing a h5 file for %s bdg files into %s" % (num_lines, self.output_file))
+        h5file = h5.File(self.output_file, 'w')
+        h5file.create_dataset('files', data=np.array(self.input_file), shape=(num_lines,))
+        h5file.create_dataset('accessions', shape= ((num_lines,)), dtype='S20')
+        base_bg = self._read_bg_file(self.input_file[0], value_column)
+        h5file['accessions'][0] = os.path.basename(self.input_file[0]).split(".")[1]
+        n_rows = base_bg.shape[0]
+        if n_rows < self.chunk_size:
+            self.chunk_size = n_rows
+        h5file.create_dataset('chunk_size', data=self.chunk_size, shape=(1,),dtype='i8')
+        h5file.create_dataset('value', shape = ((n_rows, num_lines)), chunks=((self.chunk_size,num_lines)),dtype='float')
+        for ef_ind in range(num_lines - 1):
+            e_bg = self._read_bg_file(self.input_file[ef_ind + 1], value_column)
+            h5file['accessions'][ef_ind + 1] = os.path.basename(self.input_file[ef_ind + 1]).split(".")[1] ## generally accession is second in the file name, eg., mhl.10001.txt
+            if n_rows == 0:
+                n_rows = e_bg.shape[0]
+            else:
+                if n_rows != e_bg.shape[0]:
+                    die("please provide bedgraph files with exactly same number of lines")
+            h5file['value'][:,ef_ind+1] = np.array(e_bg['value'], dtype='float')
+            if ef_ind % 50 == 0 and ef_ind > 0:
+                log.info("written %s files into h5file" % ef_ind)
+        h5file.create_dataset('chr', shape=(n_rows,), data = np.array(base_bg['chr'], dtype='str'))
+        h5file.create_dataset('start', shape=(n_rows,), data = np.array(base_bg['start'], dtype='int'))
+        h5file.create_dataset('end', shape=(n_rows,), data = np.array(base_bg['end'], dtype='int'))
+        h5file['value'][:,0] = np.array(base_bg['value'])
+        h5file.close()
+        log.info("done")
+
+    @staticmethod
+    def _read_value_matrix_file(matrix_file):
+        v_file = pd.read_table(matrix_file, header = None, sep= ",")
+        return(v_file)
+
+    def write_h5_matrix(self):
+        v_file = self._read_value_matrix_file(self.input_file[0])
+        num_lines = v_file.shape[1] - 3
+        n_rows = v_file.shape[0] - 2
+        n_rows_split = v_file.iloc[2:,0].str.split(":", expand =True)
+        h5file = h5.File(self.output_file, 'w')
+        h5file.create_dataset('files', data=np.array(self.input_file))
+        h5file.create_dataset('accessions', data = np.array(v_file.iloc[0,:][3:], dtype="string"), shape= ((num_lines,)), dtype='S20')
+        if n_rows < self.chunk_size:
+            self.chunk_size = n_rows
+        h5file.create_dataset('chunk_size', data=self.chunk_size, shape=(1,),dtype='i8')
+        h5file.create_dataset('value', shape = ((n_rows, num_lines)), chunks=((self.chunk_size,num_lines)),dtype='float')
+        for ef_ind in range(num_lines):
+            e_bg = np.array(v_file.iloc[2:,ef_ind+3], dtype="string")
+            e_bg[e_bg == "AA"] = 0
+            e_bg[e_bg == "AB"] = 1
+            e_bg[e_bg == "BB"] = 2
+            h5file['value'][:,ef_ind] = np.array(e_bg, dtype='float')
+            if ef_ind % 50 == 0 and ef_ind > 0:
+                log.info("written %s files into h5file" % ef_ind)
+        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in n_rows_split.iloc[:,0].apply(genome.get_chr_ind)]))
+        h5file.create_dataset('start', shape=(n_rows,), data = np.array(n_rows_split.iloc[:,1].str.split("-", expand=True).iloc[:,0], dtype='int'))
+        h5file.create_dataset('end', shape=(n_rows,), data = np.array(n_rows_split.iloc[:,1].str.split("-", expand=True).iloc[:,1], dtype='int'))
+        h5file.close()
+        log.info("done")
+
 
 ### Class object for the the1001g matrices
-
 def load_the1001g_hdf5_value_file(hdf5_file):
     return HDF51001gTable(hdf5_file)
 
