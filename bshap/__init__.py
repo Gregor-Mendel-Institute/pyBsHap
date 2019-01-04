@@ -165,7 +165,7 @@ def generate_hdf5(args):
     if args['matrix']:
         writeh5.write_h5_matrix()
     else:
-        writeh5.write_h5_multiple_files(args['value_column'])
+        writeh5.write_h5_multiple_files(value_column = args['value_column'])
 
 def bshap_modifybam(args):
     checkARGs(args)

@@ -43,16 +43,26 @@ class WriteHDF51001Table(object):
         e_bg.rename(columns={0:'chr',1:'start',2:'end', value_column - 1:'value' }, inplace=True)
         return(e_bg)
 
-    def write_h5_multiple_files(self, value_column=4):
+    def parse_accs_ids_input_file(self, split_str = "_"):
+        ## File names can  generally be
+        # 1. mhl.10001.txt
+        # 2. 17328_CATTTT_C3N13ACXX_3_20140219B_20140219.snpvcf.genotyper.txt
+        input_ids = pd.Series([ os.path.basename(efile) for efile in  self.input_file]).str.split("_", expand=True)
+        if len(np.unique(input_ids.iloc[:,0])) != len(self.input_file):
+            input_ids = np.array(input_ids.iloc[:,0] + input_ids.iloc[:,1], dtype="string")
+        else:
+            input_ids = np.array(input_ids.iloc[:,0], dtype="string")
+        return(input_ids)
+
+    def write_h5_multiple_files(self, value_column = 4):
         ## self.input_file is an array of files
         log.info("reading %s input files" % len(self.input_file))
         num_lines = len(self.input_file)
         log.info("writing a h5 file for %s bdg files into %s" % (num_lines, self.output_file))
         h5file = h5.File(self.output_file, 'w')
         h5file.create_dataset('files', data=np.array(self.input_file), shape=(num_lines,))
-        h5file.create_dataset('accessions', shape= ((num_lines,)), dtype='S20')
+        h5file.create_dataset('accessions', data = self.parse_accs_ids_input_file())
         base_bg = self._read_bg_file(self.input_file[0], value_column)
-        h5file['accessions'][0] = os.path.basename(self.input_file[0]).split(".")[1]
         n_rows = base_bg.shape[0]
         if n_rows < self.chunk_size:
             self.chunk_size = n_rows
@@ -60,7 +70,6 @@ class WriteHDF51001Table(object):
         h5file.create_dataset('value', shape = ((n_rows, num_lines)), chunks=((self.chunk_size,num_lines)),dtype='float')
         for ef_ind in range(num_lines - 1):
             e_bg = self._read_bg_file(self.input_file[ef_ind + 1], value_column)
-            h5file['accessions'][ef_ind + 1] = os.path.basename(self.input_file[ef_ind + 1]).split(".")[1] ## generally accession is second in the file name, eg., mhl.10001.txt
             if n_rows == 0:
                 n_rows = e_bg.shape[0]
             else:
@@ -69,7 +78,7 @@ class WriteHDF51001Table(object):
             h5file['value'][:,ef_ind+1] = np.array(e_bg['value'], dtype='float')
             if ef_ind % 50 == 0 and ef_ind > 0:
                 log.info("written %s files into h5file" % ef_ind)
-        h5file.create_dataset('chr', shape=(n_rows,), data = np.array(base_bg['chr'], dtype='str'))
+        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in base_bg['chr'].apply(genome.get_chr_ind)]) )
         h5file.create_dataset('start', shape=(n_rows,), data = np.array(base_bg['start'], dtype='int'))
         h5file.create_dataset('end', shape=(n_rows,), data = np.array(base_bg['end'], dtype='int'))
         h5file['value'][:,0] = np.array(base_bg['value'])
@@ -230,9 +239,9 @@ class ContextsHDF51001gTable(object):
 
     def __init__(self, wma_path):
         self.wma_path = wma_path
-        self.load_files()
+        self._load_files()
 
-    def load_files(self):
+    def _load_files(self):
         from glob import glob
         self.cg = HDF51001gTable(glob(self.wma_path + "/" + "*.CG.hdf5")[0])
         self.chg = HDF51001gTable(glob(self.wma_path + "/" + "*.CHG.hdf5")[0])
