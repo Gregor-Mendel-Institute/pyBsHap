@@ -23,6 +23,7 @@ class ArabidopsisGenome(object):
         self.centro_start = [14364752, 3602775, 12674550, 2919690, 11668616]
         self.centro_end   = [15750321, 3735247, 13674767, 4011692, 12082583]
         self.cetro_mid = np.add(self.centro_start, self.centro_end)/2
+        self.def_color = ["#1f78b4", "#33a02c", "#1f78b4", "#33a02c", "#1f78b4"]
 
     def load_genome_fasta(self, fasta_file):
         from pyfaidx import Fasta
@@ -76,6 +77,14 @@ class ArabidopsisGenome(object):
                 df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
             chrom_ix = np.array(self.chr_inds[self.get_chr_ind( df_str.iloc[:,0] )], dtype=int)
             return( chrom_ix + np.array(df_str.iloc[:,1], dtype=int) )
+
+    def get_genomic_position_from_ind(self, ind):
+        ## This function is just opposite to the one before.
+        # Given an index, we should get the chromosomes and position
+        chr_idx = np.searchsorted( self.chr_inds, ind ) - 1
+        ind_pos = ind - self.chr_inds[chr_idx]
+        ind_chr = np.array(self.chrs)[chr_idx]
+        return( pd.DataFrame( np.column_stack((ind_chr, ind_pos)), columns = ["chr", "pos"]  ) )
 
     def iter_windows_echr(self, echr, window_size, overlap=0):
         chr_ind = self.get_chr_ind(echr)
