@@ -47,12 +47,19 @@ class ArabidopsisGenome(object):
         return( bed_str )
 
     def get_chr_ind(self, echr):
-        echr_num = str(echr).replace("Chr", "").replace("chr", "")
         real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.chrs ] )
-        try:
-            return(np.where(real_chrs == echr_num)[0][0])
-        except IndexError as err_idx:
-            return(None)
+        if type(echr) is str or type(echr) is np.string_:
+            echr_num = str(echr).replace("Chr", "").replace("chr", "")
+            if len(np.where(real_chrs == echr_num)[0]) == 1:
+                return(np.where(real_chrs == echr_num)[0][0])
+            else:
+                return(None)
+        echr_num = np.unique( np.array( echr ) )
+        ret_echr_ix = np.zeros( len(echr), dtype="int8" )
+        for ec in echr_num:
+            t_ix = np.where(real_chrs ==  str(ec).replace("Chr", "").replace("chr", "") )[0]
+            ret_echr_ix[ np.where(np.array( echr ) == ec)[0] ] = t_ix[0]
+        return(ret_echr_ix)
 
     def get_genomewide_inds(self, df_str):
         ### This is the function to give the indices of the genome when you give a bed file.
@@ -67,8 +74,8 @@ class ArabidopsisGenome(object):
             ## here first column is chr and second is position
             if df_str.shape[1] == 3:
                 df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
-            chrom = np.char.replace(np.core.defchararray.lower(np.array(df_str.iloc[:,0], dtype="string")), "chr", "")
-            return(self.chr_inds[np.array(chrom, dtype=int) - 1] + np.array(df_str.iloc[:,1]) )
+            chrom_ix = np.array(self.chr_inds[self.get_chr_ind( df_str.iloc[:,0] )], dtype=int)
+            return( chrom_ix + np.array(df_str.iloc[:,1], dtype=int) )
 
     def iter_windows_echr(self, echr, window_size, overlap=0):
         chr_ind = self.get_chr_ind(echr)

@@ -78,7 +78,7 @@ class WriteHDF51001Table(object):
             h5file['value'][:,ef_ind+1] = np.array(e_bg['value'], dtype='float')
             if ef_ind % 50 == 0 and ef_ind > 0:
                 log.info("written %s files into h5file" % ef_ind)
-        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in base_bg['chr'].apply(genome.get_chr_ind)]) )
+        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in genome.get_chr_ind(base_bg['chr']) ]) )
         h5file.create_dataset('start', shape=(n_rows,), data = np.array(base_bg['start'], dtype='int'))
         h5file.create_dataset('end', shape=(n_rows,), data = np.array(base_bg['end'], dtype='int'))
         h5file['value'][:,0] = np.array(base_bg['value'])
@@ -110,7 +110,7 @@ class WriteHDF51001Table(object):
             h5file['value'][:,ef_ind] = np.array(e_bg, dtype='float')
             if ef_ind % 50 == 0 and ef_ind > 0:
                 log.info("written %s files into h5file" % ef_ind)
-        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in n_rows_split.iloc[:,0].apply(genome.get_chr_ind)]))
+        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in genome.get_chr_ind(n_rows_split.iloc[:,0]) ]))
         h5file.create_dataset('start', shape=(n_rows,), data = np.array(n_rows_split.iloc[:,1].str.split("-", expand=True).iloc[:,0], dtype='int'))
         h5file.create_dataset('end', shape=(n_rows,), data = np.array(n_rows_split.iloc[:,1].str.split("-", expand=True).iloc[:,1], dtype='int'))
         h5file.close()
@@ -282,3 +282,26 @@ class ContextsHDF51001gTable(object):
         req_genes_ix = self.get_filter_inds(req_genes_str)
         for egene_ix in req_genes_ix:
             yield( self.get_meths_req_gene(egene_ix, context_ix ) )
+
+    def total_methylations_(self, req_genes_str, outFile=None):
+        total_cg_meths = np.zeros(len(self.cg.accessions))
+        total_chg_meths = np.zeros(len(self.cg.accessions))
+        total_chh_meths = np.zeros(len(self.cg.accessions))
+        iter_meths = itertools.izip(self.iterate_meths_req_genes(req_genes_str, context_ix = 0), self.iterate_meths_req_genes(req_genes_str, context_ix = 1), self.iterate_meths_req_genes(req_genes_str, context_ix = 2))
+        num_genes = len(req_genes_str)
+        t_num = 1
+        for ef in iter_meths:
+            total_cg_meths = np.nansum(np.dstack((total_cg_meths, ef[0])),2)[0]
+            total_chg_meths = np.nansum(np.dstack((total_chg_meths, ef[1])), 2)[0]
+            total_chh_meths = np.nansum(np.dstack((total_chh_meths, ef[2])), 2)[0]
+            t_num += 1
+            if t_num % int(num_genes/10) == 0:
+                log.info( "progress: %s%% done", int(100 * float(t_num)/num_genes) )
+        total_cg_meths = pd.DataFrame( np.column_stack((self.cg.accessions, total_cg_meths / len(req_genes_str) )), columns = ["accessionid", "pheno"] ).dropna()
+        total_chg_meths = pd.DataFrame( np.column_stack((self.cg.accessions, total_chg_meths / len(req_genes_str) )), columns = ["accessionid", "pheno"] ).dropna()
+        total_chh_meths = pd.DataFrame( np.column_stack((self.cg.accessions, total_chh_meths / len(req_genes_str) )), columns = ["accessionid", "pheno"] ).dropna()
+        if outFile is not None:
+            total_cg_meths.to_csv( outFile + ".CG.txt", index = False )
+            total_chg_meths.to_csv( outFile + ".CHG.txt", index = False )
+            total_chh_meths.to_csv( outFile + ".CHH.txt", index = False )
+        return((total_cg_meths, total_chg_meths, total_chh_meths))
