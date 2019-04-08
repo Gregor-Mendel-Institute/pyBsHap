@@ -11,6 +11,24 @@ import logging
 
 log = logging.getLogger(__name__)
 
+def scale_colors(minval, maxval, val, safe_colors = None):
+    import palettable
+    if safe_colors is None:
+        safe_colors = palettable.colorbrewer.sequential.BuGn_7.colors
+    import sys
+    EPSILON = sys.float_info.epsilon  # Smallest possible difference.
+    i_f = float(val-minval) / float(maxval-minval) * (len(safe_colors)-1)
+    i, f = int(i_f // 1), i_f % 1  # Split into whole & fractional parts.
+    if f < EPSILON:
+        ret_col = safe_colors[i]
+    else:  # Otherwise return a color within the range between them.
+        (r1, g1, b1), (r2, g2, b2) = safe_colors[i], safe_colors[i+1]
+        ret_col = int(r1 + f*(r2-r1)), int(g1 + f*(g2-g1)), int(b1 + f*(b2-b1))
+    return('#%02x%02x%02x' % (ret_col[0], ret_col[1], ret_col[2]))
+
+np_scale_colors = np.vectorize(scale_colors)
+
+
 ## A joint plot using seaborn
 
 def meths_jointplot(x, y, reqcond, filter_pos=False, kde=True, hexplt=False):

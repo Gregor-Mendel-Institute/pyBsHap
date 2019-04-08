@@ -74,9 +74,12 @@ class ArabidopsisGenome(object):
         elif type(df_str) is pd.core.frame.DataFrame:
             ## here first column is chr and second is position
             if df_str.shape[1] == 3:
-                df_str = pd.DataFrame(df_str.iloc[:,0]).join(pd.DataFrame( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) ))
-            chrom_ix = np.array(self.chr_inds[self.get_chr_ind( df_str.iloc[:,0] )], dtype=int)
-            return( chrom_ix + np.array(df_str.iloc[:,1], dtype=int) )
+                f_df_str = pd.DataFrame(df_str.iloc[:,0])
+                f_df_str['pos'] = pd.Series( ((df_str.iloc[:,1] + df_str.iloc[:,2]) / 2).apply(int) )
+            else:
+                f_df_str = df_str
+            chrom_ix = np.array(self.chr_inds[self.get_chr_ind( f_df_str.iloc[:,0] )], dtype=int)
+            return( chrom_ix + np.array(f_df_str.iloc[:,1], dtype=int) )
 
     def get_genomic_position_from_ind(self, ind):
         ## This function is just opposite to the one before.
@@ -138,6 +141,29 @@ class ArabidopsisGenome(object):
         elif dnastring:
             dna_context = ["CHH",2]
         return((dnastring, dna_context, strand))
+
+    def get_inds_overlap_region(self, region_bed_df, name="genes", request_ind = None, g = None):
+        import pybedtools as pybed
+        assert hasattr(self, name), "please load required bed file using 'get_bed_ids_str' function. ex., ARAPORT11/Araport11_GFF3_genes_201606.bed"
+        assert type(region_bed_df) is pd.core.frame.DataFrame, "please provide a pandas series object"
+        if request_ind is None:
+            gene_bed = pybed.BedTool.from_dataframe( self.__getattribute__(name).iloc[:,[0,1,2]] )
+        else:
+            gene_bed = pybed.BedTool.from_dataframe( self.__getattribute__(name).iloc[:,[0,1,2]].iloc[[request_ind]]  )
+        region_bed = pybed.BedTool.from_dataframe(region_bed_df.iloc[:,[0,1,2]])
+        region_bed_str = np.array(region_bed_df.iloc[:,0].map(str) + "," + region_bed_df.iloc[:,1].map(str) + "," +  region_bed_df.iloc[:,2].map(str), dtype="str")
+        ## Just taking first three columns for bedtools
+        inter_region_bed = region_bed.intersect(gene_bed, wa=True)
+        inter_gene_bed = gene_bed.intersect(region_bed, wa=True)
+        if inter_region_bed.count() == 0:   ## Return if there are no matching lines.
+            return(None)
+        inter_region_bed = inter_region_bed.to_dataframe() ## wa is to return the entire bed.
+        inter_region_bed_str = np.array(inter_region_bed.iloc[:,0].map(str) + "," + inter_region_bed.iloc[:,1].map(str) + "," +  inter_region_bed.iloc[:,2].map(str), dtype="str")
+        inter_gene_bed = inter_gene_bed.to_dataframe()
+        inter_gene_bed_str = np.array(inter_gene_bed.iloc[:,0].map(str) + "," + inter_gene_bed.iloc[:,1].map(str) + "," +  inter_gene_bed.iloc[:,2].map(str), dtype="str")
+        out_dict = { "region_ix": np.where( np.in1d(region_bed_str, inter_region_bed_str ) )[0] }
+        out_dict['ref_ix'] = np.where( np.in1d(self.__getattribute__(name + '_str'), inter_gene_bed_str ) )[0]
+        return(out_dict)
 
 def get_reverse_complement(seq):
     old_chars = "ACGT"

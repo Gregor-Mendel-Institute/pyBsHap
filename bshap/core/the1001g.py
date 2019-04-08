@@ -180,6 +180,22 @@ class HDF51001gTable(object):
         chr_str = np.array(chr_df.iloc[:,0].map(str) + ',' + chr_df.iloc[:,1].map(str) + ',' + chr_df.iloc[:,2].map(str), dtype = "str" )
         return(np.where( np.in1d( chr_str, chr_intersect_str ) )[0] + chr_inds[0])
 
+    def iter_inds_overlap_regions(self, region_bed_df, g = None ):
+        assert type(region_bed_df) is pd.core.frame.DataFrame, "please provide a pandas dataframe object"
+        self_bed_str = self.get_bed_df(None, return_str = True)
+        self_bed = pybed.BedTool.from_dataframe( self.get_bed_df(None) )
+        region_bed_str = np.array(region_bed_df.iloc[:,0].map(str) + "," + region_bed_df.iloc[:,1].map(str) + "," +  region_bed_df.iloc[:,2].map(str), dtype="str")
+        ## Just taking first three columns for bedtools
+        for req_bed_ix in range(region_bed_df.shape[0]):
+            t_region_bed = pybed.BedTool.from_dataframe(region_bed_df.iloc[:,[0,1,2]].iloc[[req_bed_ix]] )
+            inter_gene_bed = self_bed.intersect(t_region_bed, wa=True)
+            if inter_gene_bed.count() == 0:   ## Return if there are no matching lines.
+                yield(None)
+            inter_gene_bed = inter_gene_bed.to_dataframe()
+            inter_gene_bed_str = np.array(inter_gene_bed.iloc[:,0].map(str) + "," + inter_gene_bed.iloc[:,1].map(str) + "," +  inter_gene_bed.iloc[:,2].map(str), dtype="str")
+            yield(np.where( np.in1d(self_bed_str, inter_gene_bed_str ) )[0])
+
+
     def get_inds_overlap_region_file(self, region_file, just_names=False, araport11_file=None):
         whole_bed = self.get_bed_df(None)
         return(run_bedtools.get_filter_bed_ix(region_file, whole_bed, just_names=just_names, araport11_file=araport11_file))
@@ -199,7 +215,7 @@ class HDF51001gTable(object):
         return(np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0])
 
     def get_inds_matching_region_file(self, region_file):
-        region_df = pd.read_table(region_file)
+        region_df = pd.read_csv(region_file, sep = "\t'")
         region_cols = np.array(region_df.iloc[:,0] + "," + region_df.iloc[:,1].map(str) + "," +  region_df.iloc[:,2].map(str), dtype="str")
         bed_str = self.get_bed_df(None, return_str=True)
         return(np.where( np.in1d(bed_cols, region_cols)  )[0])
@@ -255,7 +271,10 @@ class ContextsHDF51001gTable(object):
     def get_filter_inds(self, req_genes_str):
         ## req_genes_str is a list of all the strings
         all_strs = self.cg.get_bed_df(filter_pos_ix=None, return_str = True)
-        return(np.where( np.in1d(all_strs, req_genes_str ) )[0])
+        all_strs = np.unique(all_strs, return_index = True)
+        req_inds = all_strs[1][np.where( np.in1d(all_strs[0], req_genes_str ) )[0]]
+        log.warn("Make sure provided array is sorted based on chromosome position")
+        return(np.sort(req_inds))
 
     def get_cg_chg_chh_meths(self, filter_ind):
         ## Given list of indices, function outputs average of methylations in three contexts
@@ -266,6 +285,15 @@ class ContextsHDF51001gTable(object):
         t_req_gene = t_req_gene.set_index( self.cg.accessions )
         t_n_req_gene = t_n_req_gene.set_index( self.cg.accessions )
         return((t_req_gene, t_n_req_gene))
+
+    def differential_methylation(self, accs_ix, filter_pos_ix=None):
+        ## accs_ix = [[0,1], [2,3]]
+        assert len(accs_ix) == 2, "provide an array with two classes. eg. [[0,1], [2,3]]"
+        req_cg = pd.DataFrame( np.column_stack( ( np.nanmean( self.cg.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.cg.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
+        req_chg = pd.DataFrame( np.column_stack( ( np.nanmean( self.chg.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.chg.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
+        req_chh = pd.DataFrame( np.column_stack( ( np.nanmean( self.chh.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.chh.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
+        return( pd.DataFrame( np.column_stack( ( req_cg.iloc[:,0] - req_cg.iloc[:,1], req_chg.iloc[:,0] - req_chg.iloc[:,1], req_chh.iloc[:,0] - req_chh.iloc[:,1] ) ), columns = ['CG', "CHG", 'CHH'] )  )
+
 
     def get_meths_req_gene(self, req_gene_ix, context_ix = 0, count_thres=10):
         ##  For a given gene return a pandas dataframe methylation and number of cytosine counts
