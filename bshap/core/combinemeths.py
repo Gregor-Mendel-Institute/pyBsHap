@@ -110,7 +110,7 @@ class CombinedMethsTable(object):
         outh5file.close()
         log.info("done")
 
-    def derive_methylated_identical_pos_ix_echr(self, chrid, read_depth, pos_in_atleast):
+    def derive_methylated_identical_pos_ix_echr(self, chrid, read_depth, pos_in_atleast, max_read_depth = 80):
         ## Caution: would probably need much memory if you give many files.
         # meth_list is a list of meths meth5py object read
         # returns common positions.
@@ -124,6 +124,7 @@ class CombinedMethsTable(object):
             e_chr_pos = m.positions[e_chrinds[1][0]:e_chrinds[1][1]]  ## these are the indices here
             e_chr_depth = m.__getattr__('total', np.arange(e_chrinds[1][0], e_chrinds[1][1]) )
             e_chr_depth[e_chr_depth < read_depth] = 0
+            e_chr_depth[e_chr_depth > max_read_depth] = 0
             e_chr_depth[e_chr_depth >= read_depth] = 1
             common_positions_scores[e_chr_pos - 1] = np.add( common_positions_scores[e_chr_pos - 1], m.__getattr__('methylated', np.arange(e_chrinds[1][0], e_chrinds[1][1]) ) * e_chr_depth )
             t_echr_pos_ix[e_chr_pos - 1, m_ix] = np.arange(len(e_chr_pos)) + e_chrinds[1][0]
@@ -137,12 +138,12 @@ class CombinedMethsTable(object):
                 m.filter_pos_ix = np.append(m.filter_pos_ix, m_filter_inds)
         ### meths_list now has the filter_pos_ix as a key
 
-    def derive_methylated_identical_pos_ix(self, read_depth=5, pos_in_atleast=1):
+    def derive_methylated_identical_pos_ix(self, read_depth=5, pos_in_atleast=1, max_read_depth = 80):
         ## Here you get all the common positions going in a loop for each chromosome.
         # It might be some time consuming.
         for e_chr in genome.chrs:
             # the function below is appending the list m.filter_pos_ix
             # So, make sure you have some place in the RAM.
             log.info("reading in through chromosome %s" % e_chr)
-            self.derive_methylated_identical_pos_ix_echr(e_chr, read_depth=read_depth, pos_in_atleast=pos_in_atleast)
+            self.derive_methylated_identical_pos_ix_echr(e_chr, read_depth=read_depth, pos_in_atleast=pos_in_atleast, max_read_depth=max_read_depth)
         log.info("done!")
