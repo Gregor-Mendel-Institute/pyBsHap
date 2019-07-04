@@ -43,15 +43,17 @@ class WriteHDF51001Table(object):
         e_bg.rename(columns={0:'chr',1:'start',2:'end', value_column - 1:'value' }, inplace=True)
         return(e_bg)
 
-    def parse_accs_ids_input_file(self, split_str = "_"):
+    def parse_accs_ids_input_file(self, split_str = "."):
         ## File names can  generally be
         # 1. mhl.10001.txt
         # 2. 17328_CATTTT_C3N13ACXX_3_20140219B_20140219.snpvcf.genotyper.txt
-        input_ids = pd.Series([ os.path.basename(efile) for efile in  self.input_file]).str.split("_", expand=True)
-        if len(np.unique(input_ids.iloc[:,0])) != len(self.input_file):
-            input_ids = np.array(input_ids.iloc[:,0] + input_ids.iloc[:,1], dtype="string")
-        else:
+        input_ids = pd.Series([ os.path.basename(efile) for efile in  self.input_file]).str.split(split_str, expand=True)
+        if len(np.unique(input_ids.iloc[:,0])) == len(self.input_file):
             input_ids = np.array(input_ids.iloc[:,0], dtype="string")
+        elif len(np.unique(input_ids.iloc[:,1])) == len(self.input_file):
+            input_ids = np.array(input_ids.iloc[:,1], dtype="string")
+        else:
+            input_ids = np.array(input_ids.iloc[:,0] + input_ids.iloc[:,1], dtype="string")
         return(input_ids)
 
     def write_h5_multiple_files(self, value_column = 4):

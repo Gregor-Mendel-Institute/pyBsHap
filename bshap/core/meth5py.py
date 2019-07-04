@@ -92,12 +92,11 @@ def generage_h5file_from_allc(allc_id, allc_path, outFile, pval_thres=0.01):
     log.info("writing a hdf5 file")
     generate_H5File(allcBed,chrpositions, outFile)
 
-chunk_size = 100000
 def generate_H5File(allcBed, chrpositions, outFile):
+    chunk_size = min(100000, allcBed.shape[0])
     h5file = h5.File(outFile, 'w')
-    num_lines = len(chrpositions)
     h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
-    h5file.create_dataset('chrpositions', data=chrpositions, shape=(num_lines,),dtype='i4')
+    h5file.create_dataset('chrpositions', data=chrpositions, shape=(len(chrpositions),),dtype='int')
     allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total', 'methylated']
     allc_dtypes = ['S16', 'int', 'S4', 'S8', 'int', 'int', 'int8']
     ## Going through all the columns
