@@ -29,22 +29,27 @@ class ArabidopsisGenome(object):
         from pyfaidx import Fasta
         self.fasta = Fasta(fasta_file)
 
-    def get_bed_ids_str(self, **kwargs):
+    def load_bed_ids_str(self, **kwargs):
         for req_name in kwargs:
-            req_bed_df = pd.read_table( kwargs[req_name], header=None )
+            req_bed_df = pd.read_csv( kwargs[req_name], header=None, sep = "\t")
             setattr(self, req_name, req_bed_df)
             setattr(self, req_name + "_str", np.array(req_bed_df.iloc[:,0] + ',' + req_bed_df.iloc[:,1].map(str) + ',' + req_bed_df.iloc[:,2].map(str), dtype="str") )
 
-    def determine_bed_from_araportids(self, name, araportids):
+    def determine_bed_from_araportids(self, name, araportids, return_bed=False):
         assert type(araportids) is pd.core.series.Series, "please provide a pandas series object"
-        assert hasattr(self, name), "please load required bed file using 'get_bed_ids_str' function. ex., ARAPORT11/Araport11_GFF3_genes_201606.bed"
+        assert hasattr(self, name), "please load required bed file using 'load_bed_ids_str' function. ex., ARAPORT11/Araport11_GFF3_genes_201606.bed"
         bed_str = np.zeros(0, dtype="float")
+        bed_ix = np.zeros(0, dtype="int")
         for ei in araportids:
             t_ind = np.where( self.__getattribute__( name ).iloc[:,3] == ei )[0]
             if len(t_ind) == 0:
                 bed_str = np.append(bed_str, '')
             else:
                 bed_str = np.append( bed_str, self.__getattribute__( name + "_str" )[t_ind[0]] )
+                bed_ix = np.append(bed_ix, t_ind[0])
+        if return_bed:
+            bed_str = self.__getattribute__( name ).iloc[bed_ix,]
+            bed_str = bed_str.rename(columns={0:"chrom", 1:"start", 2:"end", 3:'id', 4:'score',5:'strand'})
         return( bed_str )
 
     def get_chr_ind(self, echr):
@@ -57,6 +62,7 @@ class ArabidopsisGenome(object):
                 return(None)
         echr_num = np.unique( np.array( echr ) )
         ret_echr_ix = np.zeros( len(echr), dtype="int8" )
+        import ipdb; ipdb.set_trace()
         for ec in echr_num:
             t_ix = np.where(real_chrs ==  str(ec).replace("Chr", "").replace("chr", "") )[0]
             ret_echr_ix[ np.where(np.array( echr ) == ec)[0] ] = t_ix[0]
@@ -144,7 +150,7 @@ class ArabidopsisGenome(object):
 
     def get_inds_overlap_region(self, region_bed_df, name="genes", request_ind = None, g = None):
         import pybedtools as pybed
-        assert hasattr(self, name), "please load required bed file using 'get_bed_ids_str' function. ex., ARAPORT11/Araport11_GFF3_genes_201606.bed"
+        assert hasattr(self, name), "please load required bed file using 'load_bed_ids_str' function. ex., ARAPORT11/Araport11_GFF3_genes_201606.bed"
         assert type(region_bed_df) is pd.core.frame.DataFrame, "please provide a pandas series object"
         if request_ind is None:
             gene_bed = pybed.BedTool.from_dataframe( self.__getattribute__(name).iloc[:,[0,1,2]] )

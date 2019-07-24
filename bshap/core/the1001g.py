@@ -15,7 +15,7 @@ import pybedtools as pybed
 from . import genome as g
 genome = g.ArabidopsisGenome()
 
-
+logging.basicConfig()
 log = logging.getLogger(__name__)
 
 def die(msg):
@@ -37,9 +37,9 @@ class WriteHDF51001Table(object):
         t_ef = open(bg_file, 'rb')
         ifheader = sniffer.has_header(t_ef.read(4096))
         if ifheader:
-            e_bg = pd.read_table(bg_file, header = 0, sep= delimiter)
+            e_bg = pd.read_csv(bg_file, header = 0, sep= delimiter)
         else:
-            e_bg = pd.read_table(bg_file, header = None, sep= delimiter)
+            e_bg = pd.read_csv(bg_file, header = None, sep= delimiter)
         e_bg.rename(columns={0:'chr',1:'start',2:'end', value_column - 1:'value' }, inplace=True)
         return(e_bg)
 
@@ -296,40 +296,24 @@ class ContextsHDF51001gTable(object):
         req_chh = pd.DataFrame( np.column_stack( ( np.nanmean( self.chh.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.chh.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
         return( pd.DataFrame( np.column_stack( ( req_cg.iloc[:,0] - req_cg.iloc[:,1], req_chg.iloc[:,0] - req_chg.iloc[:,1], req_chh.iloc[:,0] - req_chh.iloc[:,1] ) ), columns = ['CG', "CHG", 'CHH'] )  )
 
-
-    def get_meths_req_gene(self, req_gene_ix, context_ix = 0, count_thres=10):
+    def get_meths_req_gene(self, req_gene_ix, count_thres=10):
         ##  For a given gene return a pandas dataframe methylation and number of cytosine counts
-        ## req_genes_str = ["Chr1,10319732,10320402"]
-        ## context_ix == 0 ? CG, context_ix == 1 ? CHG, context_ix == 2 ? CHH
-        (t_req_gene, t_n_req_gene) = self.get_cg_chg_chh_meths( np.array([req_gene_ix], dtype=int) )
-        t_req_gene = t_req_gene.iloc[:, context_ix]
-        t_n_req_gene = t_n_req_gene.iloc[:, context_ix]
-        t_req_gene[ np.where( t_n_req_gene < count_thres )[0] ] = np.nan
-        return(t_req_gene)
-
-    def iterate_meths_req_genes(self, req_genes_str, context_ix=0):
-        ## req_genes_str = ["Chr1,10319732,10320402"]
-        req_genes_ix = self.get_filter_inds(req_genes_str)
-        for egene_ix in req_genes_ix:
-            yield( self.get_meths_req_gene(egene_ix, context_ix ) )
+        ## req_gene_ix is an np array
+        assert type(req_gene_ix) is np.ndarray, "provide an np array for indices"
+        t_cg = self.__getattribute__('cg').__getattr__('value', req_gene_ix)
+        t_chg = self.__getattribute__('chg').__getattr__('value', req_gene_ix)
+        t_chh = self.__getattribute__('chh').__getattr__('value', req_gene_ix)
+        t_cg[ self.__getattribute__('n_cg').__getattr__('value', req_gene_ix) < count_thres ] = np.nan
+        t_chg[ self.__getattribute__('n_chg').__getattr__('value', req_gene_ix) < count_thres ] = np.nan
+        t_chh[ self.__getattribute__('n_chh').__getattr__('value', req_gene_ix) < count_thres ] = np.nan
+        req_meths = {'CG': pd.DataFrame(t_cg, columns=self.cg.accessions), 'CHG': pd.DataFrame(t_chg, columns=self.cg.accessions), 'CHH': pd.DataFrame(t_chh, columns=self.cg.accessions)}
+        return(req_meths)
 
     def total_methylations_(self, req_genes_str, outFile=None):
-        total_cg_meths = np.zeros(len(self.cg.accessions))
-        total_chg_meths = np.zeros(len(self.cg.accessions))
-        total_chh_meths = np.zeros(len(self.cg.accessions))
-        iter_meths = itertools.izip(self.iterate_meths_req_genes(req_genes_str, context_ix = 0), self.iterate_meths_req_genes(req_genes_str, context_ix = 1), self.iterate_meths_req_genes(req_genes_str, context_ix = 2))
-        num_genes = len(req_genes_str)
-        t_num = 1
-        for ef in iter_meths:
-            total_cg_meths = np.nansum(np.dstack((total_cg_meths, ef[0])),2)[0]
-            total_chg_meths = np.nansum(np.dstack((total_chg_meths, ef[1])), 2)[0]
-            total_chh_meths = np.nansum(np.dstack((total_chh_meths, ef[2])), 2)[0]
-            t_num += 1
-            if t_num % int(num_genes/10) == 0:
-                log.info( "progress: %s%% done", int(100 * float(t_num)/num_genes) )
-        total_cg_meths = pd.DataFrame( np.column_stack((self.cg.accessions, total_cg_meths / len(req_genes_str) )), columns = ["accessionid", "pheno"] ).dropna()
-        total_chg_meths = pd.DataFrame( np.column_stack((self.cg.accessions, total_chg_meths / len(req_genes_str) )), columns = ["accessionid", "pheno"] ).dropna()
-        total_chh_meths = pd.DataFrame( np.column_stack((self.cg.accessions, total_chh_meths / len(req_genes_str) )), columns = ["accessionid", "pheno"] ).dropna()
+        all_meths = self.get_meths_req_gene(self.get_filter_inds(req_genes_str))
+        total_cg_meths = pd.DataFrame( np.column_stack((self.cg.accessions, np.nanmean(np.array(all_meths['CG']), axis = 0) )), columns = ["accessionid", "pheno"] ).dropna()
+        total_chg_meths = pd.DataFrame( np.column_stack((self.cg.accessions, np.nanmean(np.array(all_meths['CHG']), axis = 0) )), columns = ["accessionid", "pheno"] ).dropna()
+        total_chh_meths = pd.DataFrame( np.column_stack((self.cg.accessions, np.nanmean(np.array(all_meths['CHH']), axis = 0) )), columns = ["accessionid", "pheno"] ).dropna()
         if outFile is not None:
             total_cg_meths.to_csv( outFile + ".CG.txt", index = False )
             total_chg_meths.to_csv( outFile + ".CHG.txt", index = False )
