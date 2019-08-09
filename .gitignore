@@ -1,5 +1,3 @@
-bshap/*cache*
-bshap/core/*cache*
-bshap/*.pyc
-bshap/core/*.pyc
+*cache*
+*.pyc
 pyBsHap.egg-info/

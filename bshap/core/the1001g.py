@@ -89,7 +89,7 @@ class WriteHDF51001Table(object):
 
     @staticmethod
     def _read_value_matrix_file(matrix_file):
-        v_file = pd.read_table(matrix_file, header = None, sep= ",")
+        v_file = pd.read_csv(matrix_file, header = None, sep= ",")
         return(v_file)
 
     def write_h5_matrix(self):
@@ -153,7 +153,7 @@ class HDF51001gTable(object):
 
     def change_accs_ids(self, sra_table):
         ## /projects/cegs/rahul/009.1001methylomes.rawdata/final_dataset_1001meths_rawdata.txt
-        sra_table_1001g = pd.read_table(sra_table, header = None)
+        sra_table_1001g = pd.read_csv(sra_table, header = None, sep = "\t")
         self.accessions = np.array([ str(sra_table_1001g.iloc[:,0][np.where(sra_table_1001g.iloc[:,1] == es)[0][0]]) for es in self.accessions])
 
     def get_bed_df(self, filter_pos_ix, return_str = False):

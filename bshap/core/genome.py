@@ -7,6 +7,10 @@ import string
 
 log = logging.getLogger(__name__)
 
+def die(msg):
+  sys.stderr.write('Error: ' + msg + '\n')
+  sys.exit(1)
+
 def getInd_bin_bed(bin_bed, tair10):
     ## bin_bed = ["Chr1", 1, 1000]
     bin_s = [int(bin_bed[0].replace("Chr", "")) - 1, int(bin_bed[1]), int(bin_bed[2])]
@@ -62,7 +66,6 @@ class ArabidopsisGenome(object):
                 return(None)
         echr_num = np.unique( np.array( echr ) )
         ret_echr_ix = np.zeros( len(echr), dtype="int8" )
-        import ipdb; ipdb.set_trace()
         for ec in echr_num:
             t_ix = np.where(real_chrs ==  str(ec).replace("Chr", "").replace("chr", "") )[0]
             ret_echr_ix[ np.where(np.array( echr ) == ec)[0] ] = t_ix[0]
