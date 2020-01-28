@@ -3,7 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 import string
-
+import sys, os.path
 
 log = logging.getLogger(__name__)
 
@@ -19,15 +19,23 @@ def getInd_bin_bed(bin_bed, tair10):
 class ArabidopsisGenome(object):
     ## coordinates for ArabidopsisGenome using TAIR 10
 
-    def __init__(self):
-        self.chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
-        self.real_chrlen = [34964571, 22037565, 25499034, 20862711, 31270811]
-        self.golden_chrlen = [30427671, 19698289, 23459830, 18585056, 26975502]
+    def __init__(self, ref_genome = "at_tair10"):
+        if ref_genome == "at_tair10":
+            self.chrs = ['Chr1','Chr2','Chr3','Chr4','Chr5']
+            self.def_color = ["#1f78b4", "#33a02c", "#1f78b4", "#33a02c", "#1f78b4"]
+            self.real_chrlen = [34964571, 22037565, 25499034, 20862711, 31270811]
+            self.golden_chrlen = [30427671, 19698289, 23459830, 18585056, 26975502]
+            self.centro_start = [14364752, 3602775, 12674550, 2919690, 11668616]
+            self.centro_end   = [15750321, 3735247, 13674767, 4011692, 12082583]
+            self.cetro_mid = np.add(self.centro_start, self.centro_end)/2
+        elif os.path.exists(ref_genome):
+            ## Provide a fasta file to check for genome lengths etc
+            from pyfaidx import Faidx
+            genome = Faidx(ref_genome).index
+            self.chrs = np.sort(np.array(genome.keys())).tolist()
+            self.real_chrlen = [ genome[ef].rlen for ef in self.chrs]
+            self.golden_chrlen = self.real_chrlen
         self.chr_inds = np.append(0, np.cumsum(self.golden_chrlen))
-        self.centro_start = [14364752, 3602775, 12674550, 2919690, 11668616]
-        self.centro_end   = [15750321, 3735247, 13674767, 4011692, 12082583]
-        self.cetro_mid = np.add(self.centro_start, self.centro_end)/2
-        self.def_color = ["#1f78b4", "#33a02c", "#1f78b4", "#33a02c", "#1f78b4"]
 
     def load_genome_fasta(self, fasta_file):
         from pyfaidx import Fasta

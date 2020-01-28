@@ -79,6 +79,7 @@ def get_options(program_license,program_version_message):
     permeth_parser.add_argument("-o", "--output", dest="outFile", help="output file.")
     permeth_parser.add_argument("-p", "--bedtools_path", dest="bedtoolsPath", help="path to bedtools used for genome wide averages")
     permeth_parser.add_argument("-t", "--context", dest="context", help="required context to get the average, ex. C[ATC]G, C[ATC][ATC], CG, CTA, etc")
+    permeth_parser.add_argument("--ref_genome", dest="ref_genome", default="at_tair10", type=str, help="Path for reference fasta file")
     permeth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     permeth_parser.set_defaults(func=bsseq_meth_average)
 
