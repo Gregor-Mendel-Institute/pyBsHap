@@ -12,6 +12,7 @@ from . import run_bedtools
 from . import genome as g
 import csv
 import itertools
+import re
 
 log = logging.getLogger(__name__)
 
@@ -286,40 +287,86 @@ class HDF5MethTable(object):
         else:
             raise(NotImplementedError)
 
-    def AveMethylation_All_Contexts( self, filter_pos_ix, category = 1 ):
+    def _AveMethylation_All_Contexts( self, filter_pos_ix, category = 1 ):
         cg_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "CG[ATGC]" )
         chg_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "C[ATC]G" )
         chh_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "C[ATC][ATC]" )
         return( (cg_meth, chg_meth, chh_meth) )
 
-    def generate_meth_average_in_windows(self, out_file, window_size, req_context=None, category=1):
+    def _TotalCounts_All_Contexts(self, filter_pos_ix):
+        t_count_cg = self.get_req_mc_class_ix("CG[ATGC]", filter_pos_ix)
+        t_count_chg = self.get_req_mc_class_ix("C[ATC]G", filter_pos_ix)
+        t_count_chh = self.get_req_mc_class_ix("C[ATC][ATC]", filter_pos_ix)
+        return( (t_count_cg, t_count_chg, t_count_chh) )
+
+    def generate_meth_average_in_windows(self, out_file, window_size, category=1):
         ## Methylation category here by default is weighted average
         # look the function in HDF51001gTable MethylationSummaryStats).
-        outmeths_avg = open(out_file, 'w')
+        outmeths_cg_avg = open(out_file + ".CG.bg", 'w')
+        outmeths_chg_avg = open(out_file + ".CHG.bg", 'w')
+        outmeths_chh_avg = open(out_file + ".CHH.bg", 'w')
         for echr, echrlen in zip(self.genome.chrs, self.genome.golden_chrlen):
             self_windows = self.iter_chr_windows(echr, window_size)
             count = 0
             log.info("analyzing %s" % echr)
             for ewin in self_windows:
-                t_count = len(self.get_req_mc_class_ix(req_context, ewin[1]))
-                req_meth_avg = self.MethylationSummaryStats(ewin[1], category, req_context)
-                outmeths_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg, t_count))
+                t_count = self._TotalCounts_All_Contexts( ewin[1] )
+                req_meth_avg = self._AveMethylation_All_Contexts(ewin[1], category)
+                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[0], t_count[0]))
+                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[1], t_count[1]))
+                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[2], t_count[2]))
                 count = count + 1
                 if count % 1000 == 0:
                     log.info("progress: analysed %s windows" % count)
-        outmeths_avg.close()
+        outmeths_cg_avg.close()
+        outmeths_chg_avg.close()
+        outmeths_chh_avg.close()
         log.info("done!")
 
-    def generate_meth_average_required_bed(self, required_bed, outmeths_avg, req_context=None, category=1):
-        ### required_bed = ["Chr1", 1, 1000]
-        filter_pos_ix = self.get_filter_inds(required_bed)
-        req_meth_avg = self.MethylationSummaryStats(filter_pos_ix, category, req_context)
-        if outmeths_avg == '':
-            return(req_meth_avg)
-        elif outmeths_avg is not None:
-            outmeths_avg.write("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1], required_bed[2], req_meth_avg))
-        else:
-            print(("%s\t%s\t%s\t%s\n" % (required_bed[0], required_bed[1], required_bed[2], req_meth_avg)))
+    def generate_meth_average_required_bed(self, required_bed, out_file, category=1):
+        if op.isfile(required_bed):
+            req_regions = pd.read_csv(required_bed, sep = "\t", header=None)
+        elif type(required_bed) is str:
+            ### required_bed = "Chr1,1,1000"
+            req_regions = pd.DataFrame(required_bed.split(",")).T
+        elif type(required_bed) is pd.DataFrame:
+            req_regions = required_bed
+        assert len(req_regions.columns) >= 3, "bed file should have minimum of 3 columns. eg., Chr, Start, End"
+        outmeths_cg_avg = open(out_file + ".CG.bg", 'w')
+        outmeths_chg_avg = open(out_file + ".CHG.bg", 'w')
+        outmeths_chh_avg = open(out_file + ".CHH.bg", 'w')
+        for er in req_regions.iterrows():
+            t_filter_pos_ix = self.get_filter_inds( [er[1][0], int(er[1][1]), int(er[1][2]) ] )
+            count = 0
+            t_count = self._TotalCounts_All_Contexts( t_filter_pos_ix )
+            req_meth_avg = self._AveMethylation_All_Contexts(t_filter_pos_ix, category)
+            outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[0], t_count[0]))
+            outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[1], t_count[1]))
+            outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[2], t_count[2]))
+            count = count + 1
+            if count % 100 == 0:
+                log.info("progress: analysed %s regions" % count)
+        outmeths_cg_avg.close()
+        outmeths_chg_avg.close()
+        outmeths_chh_avg.close()
+        log.info("done!")
+
+def load_input_meths(inFile, allc_path, ref_genome):
+    assert op.isfile(inFile), "input file is not present"
+    _,inType = op.splitext(inFile)
+    if inType == '.hdf5':
+        log.info("reading hdf5 file!")
+        meths = load_hdf5_methylation_file(inFile, ref_genome)
+        log.info("done!")
+        return(meths)
+    outhdf5 = op.splitext(op.splitext(inFile)[0])[0] + ".hdf5"
+    if len(re.compile(".tsv.gz$").findall(inFile)) > 0:
+        log.info("generating hdf5 file from allc files, %s!" % outhdf5)
+        generage_h5file_from_allc(inFile, "new", outhdf5)
+    log.info("loading the hdf5 file %s!" % outhdf5)
+    meths = load_hdf5_methylation_file(outhdf5, ref_genome)
+    log.info("done!")
+    return(meths)
 
 def potatoskin_methylation_averages(args):
     # bin_bed = Chr1,1,100
@@ -328,34 +375,10 @@ def potatoskin_methylation_averages(args):
         run_bedtools.get_genomewide_methylation_average(args)
         log.info("finished!")
         return(0)
-    elif args['allc_path'] ==  "hdf5":
-        log.info("reading hdf5 file!")
-        meths = load_hdf5_methylation_file(args['inFile'], args['ref_genome'])
-        log.info("done!")
-    else:
-        if args['allc_path'] == 'new':
-            outhdf5 = op.splitext(op.splitext(args['inFile'])[0])[0] + ".hdf5"
-        else:
-            outhdf5 = args['allc_path'] + "allc_" + args['inFile'] + ".hdf5"
-        if op.isfile(outhdf5):
-            log.info("loading the hdf5 file %s!" % outhdf5)
-        else:
-            log.info("generating hdf5 file from allc files, %s!" % outhdf5)
-            generage_h5file_from_allc(args['inFile'], args['allc_path'], outhdf5)
-        meths = load_hdf5_methylation_file(outhdf5, args['ref_genome'])
-        log.info("done!")
+    meths = load_input_meths(args['inFile'], args['allc_path'], args['ref_genome'])
     if args['required_region'] == '0,0,0':
-        meths.generate_meth_average_in_windows(args['outFile'], args['window_size'], category=args['category'], req_context=args['context'])
+        meths.generate_meth_average_in_windows(args['outFile'], args['window_size'], category=args['category'])
         return(0)
-    if args['outFile'] is not None:
-        outmeths_avg = open(args['outFile'], 'w')
-    else:
-        outmeths_avg = None
-    required_region = args['required_region'].split(',')
-    required_bed = [required_region[0], int(required_region[1]), int(required_region[2])]
-    log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-    meths.generate_meth_average_required_bed(required_bed, outmeths_avg, args['category'])
-    if outmeths_avg is not None:
-        outmeths_avg.close()
+    meths.generate_meth_average_required_bed(args['required_region'], args['outFile'], args['category'])
     log.info('finished!')
     return(0)
