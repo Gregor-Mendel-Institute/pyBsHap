@@ -7,6 +7,5 @@ LABEL authors="rahul.pisupati@gmi.oeaw.ac.at" \
     description="Docker image containing all requirements for the nf-core/methylpy pipeline"
 COPY environment.yml /
 RUN conda env create -f /environment.yml && conda clean -a
-# install dependencies for DMRfind
-RUN conda activate pybshap && pip install scikit-allel==0.20.3 && pip install "git+https://github.com/Gregor-Mendel-Institute/pyBsHap.git"
+RUN source activate /opt/conda/envs/pybshap && pip install scikit-allel==0.20.3 && pip install "git+https://github.com/Gregor-Mendel-Institute/pyBsHap.git"
 ENV PATH /opt/conda/envs/pybshap/bin:$PATH
