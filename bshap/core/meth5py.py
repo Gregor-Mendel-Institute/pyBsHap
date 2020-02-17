@@ -312,9 +312,9 @@ class HDF5MethTable(object):
             for ewin in self_windows:
                 t_count = self._TotalCounts_All_Contexts( ewin[1] )
                 req_meth_avg = self._AveMethylation_All_Contexts(ewin[1], category)
-                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[0], t_count[0]))
-                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[1], t_count[1]))
-                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[2], t_count[2]))
+                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[0], len(t_count[0])))
+                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[1], len(t_count[1])))
+                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[2], len(t_count[2])))
                 count = count + 1
                 if count % 1000 == 0:
                     log.info("progress: analysed %s windows" % count)
@@ -340,9 +340,9 @@ class HDF5MethTable(object):
             count = 0
             t_count = self._TotalCounts_All_Contexts( t_filter_pos_ix )
             req_meth_avg = self._AveMethylation_All_Contexts(t_filter_pos_ix, category)
-            outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[0], t_count[0]))
-            outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[1], t_count[1]))
-            outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[2], t_count[2]))
+            outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[0], len(t_count[0])))
+            outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[1], len(t_count[1])))
+            outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[2], len(t_count[2])))
             count = count + 1
             if count % 100 == 0:
                 log.info("progress: analysed %s regions" % count)
