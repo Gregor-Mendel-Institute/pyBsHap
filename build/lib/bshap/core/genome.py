@@ -32,7 +32,7 @@ class ArabidopsisGenome(object):
             ## Provide a fasta file to check for genome lengths etc
             from pyfaidx import Faidx
             genome = Faidx(ref_genome).index
-            self.chrs = np.sort(np.array([ef for ef in genome.keys()])).tolist()
+            self.chrs = np.sort(np.array(genome.keys())).tolist()
             self.real_chrlen = [ genome[ef].rlen for ef in self.chrs]
             self.golden_chrlen = self.real_chrlen
         self.chr_inds = np.append(0, np.cumsum(self.golden_chrlen))

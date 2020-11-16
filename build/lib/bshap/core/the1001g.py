@@ -8,12 +8,14 @@ import os.path
 import glob
 import sys
 from . import run_bedtools
+import csv
 import itertools
 import pybedtools as pybed
 
 from . import genome as g
 genome = g.ArabidopsisGenome()
 
+logging.basicConfig()
 log = logging.getLogger(__name__)
 
 def die(msg):
@@ -26,13 +28,15 @@ class WriteHDF51001Table(object):
         self.chunk_size = chunk_size
         self.input_file = input_file
         self.output_file = output_file
-        # self.genome = g.ArabidopsisGenome(ref_genome)
         #self.num_lines = len(input_file)
 
     @staticmethod
-    def _read_bg_file(bg_file, value_column, header = False, delimiter = "\t"):
-        ## Also provide the column which value contains    
-        if header:
+    def _read_bg_file(bg_file, value_column, delimiter = "\t"):
+        ## Also provide the column which value contains
+        sniffer = csv.Sniffer()
+        t_ef = open(bg_file, 'rb')
+        ifheader = sniffer.has_header(t_ef.read(4096))
+        if ifheader:
             e_bg = pd.read_csv(bg_file, header = 0, sep= delimiter)
         else:
             e_bg = pd.read_csv(bg_file, header = None, sep= delimiter)
@@ -45,11 +49,11 @@ class WriteHDF51001Table(object):
         # 2. 17328_CATTTT_C3N13ACXX_3_20140219B_20140219.snpvcf.genotyper.txt
         input_ids = pd.Series([ os.path.basename(efile) for efile in  self.input_file]).str.split(split_str, expand=True)
         if len(np.unique(input_ids.iloc[:,0])) == len(self.input_file):
-            input_ids = np.array(input_ids.iloc[:,0], dtype="str")
+            input_ids = np.array(input_ids.iloc[:,0], dtype="string")
         elif len(np.unique(input_ids.iloc[:,1])) == len(self.input_file):
-            input_ids = np.array(input_ids.iloc[:,1], dtype="str")
+            input_ids = np.array(input_ids.iloc[:,1], dtype="string")
         else:
-            input_ids = np.array(input_ids.iloc[:,0] + input_ids.iloc[:,1], dtype="str")
+            input_ids = np.array(input_ids.iloc[:,0] + input_ids.iloc[:,1], dtype="string")
         return(input_ids)
 
     def write_h5_multiple_files(self, value_column = 4):
@@ -58,8 +62,8 @@ class WriteHDF51001Table(object):
         num_lines = len(self.input_file)
         log.info("writing a h5 file for %s bdg files into %s" % (num_lines, self.output_file))
         h5file = h5.File(self.output_file, 'w')
-        h5file.create_dataset('files', data=np.array(self.input_file).astype("S"), shape=(num_lines,))
-        h5file.create_dataset('accessions', data = np.array(self.parse_accs_ids_input_file(), h5.special_dtype(vlen=str)))
+        h5file.create_dataset('files', data=np.array(self.input_file), shape=(num_lines,))
+        h5file.create_dataset('accessions', data = self.parse_accs_ids_input_file())
         base_bg = self._read_bg_file(self.input_file[0], value_column)
         n_rows = base_bg.shape[0]
         if n_rows < self.chunk_size:
@@ -76,8 +80,7 @@ class WriteHDF51001Table(object):
             h5file['value'][:,ef_ind+1] = np.array(e_bg['value'], dtype='float')
             if ef_ind % 50 == 0 and ef_ind > 0:
                 log.info("written %s files into h5file" % ef_ind)
-        # h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in genome.get_chr_ind(base_bg['chr']) ]) )
-        h5file.create_dataset('chr', shape=(n_rows,), data = np.array(base_bg['chr'], dtype = "str") )
+        h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in genome.get_chr_ind(base_bg['chr']) ]) )
         h5file.create_dataset('start', shape=(n_rows,), data = np.array(base_bg['start'], dtype='int'))
         h5file.create_dataset('end', shape=(n_rows,), data = np.array(base_bg['end'], dtype='int'))
         h5file['value'][:,0] = np.array(base_bg['value'])
@@ -126,15 +129,13 @@ class HDF51001gTable(object):
     def __init__(self,hdf5_file):
         self.h5file = h5.File(hdf5_file,'r')
         self.chunk_size = self.h5file['chunk_size'][0]
-        self.accessions = np.array(self.h5file['accessions']).astype('U13')
+        self.accessions = np.array(self.h5file['accessions'])
 
     def __getattr__(self, name, filter_pos_ix=None, return_np=False):
         if name not in ['chr', 'start', 'end', 'value']:
             raise AttributeError("%s is not in the keys for HDF5. Only accepted values are ['chr', 'start', 'end', 'value']" % name)
         if filter_pos_ix is None:
             if return_np:
-                if name in ['chr']:
-                    return( np.array(pd.Series(self.h5file[str(name)]).str.decode("utf-8") ) )
                 return(np.array(self.h5file[str(name)]))
             return(self.h5file[str(name)])
         elif type(filter_pos_ix) is np.ndarray:
@@ -143,7 +144,7 @@ class HDF51001gTable(object):
         else:
             ret_attr = np.array(self.h5file[str(name)][filter_pos_ix])
         if name in ['chr']:
-            ret_attr = np.array( pd.Series(ret_attr).str.decode("utf-8") )
+            ret_attr = ret_attr.astype('U13')
         elif name in ['start', 'end']:
             ret_attr = ret_attr.astype(int)
         else:
@@ -166,7 +167,7 @@ class HDF51001gTable(object):
     def get_inds_overlap_region(self, region_bed, g = None):
         ## region_bed = ['Chr1',3631, 5899]
         ## or region_bed = "Chr1,3631,5899"
-        if isinstance(region_bed, str):
+        if isinstance(region_bed, basestring):
             t_split = region_bed.split(",")
             assert len(t_split) == 3
             region_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
@@ -206,14 +207,14 @@ class HDF51001gTable(object):
         ## maybe useful for wma hdf5 files
         ## region_bed = ['Chr1',3631, 5899]
         ## or region_bed = "Chr1,3631,5899"
-        if isinstance(region_bed, str):
+        if isinstance(region_bed, basestring):
             t_split = region_bed.split(",")
             assert len(t_split) == 3
             region_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
-        chr_inds = np.where(self.__getattr__("chr", return_np=True) == region_bed[0])[0]
+        chr_inds = np.where(np.char.decode(np.array(self.__getattr__("chr", None))) == region_bed[0])[0]
         chr_start = self.__getattr__("start", chr_inds)
         chr_end = self.__getattr__("end", chr_inds)
-        return(chr_inds[np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0]])
+        return(np.where( (chr_start == region_bed[1]) & (chr_end == region_bed[2]) )[0])
 
     def get_inds_matching_region_file(self, region_file):
         region_df = pd.read_csv(region_file, sep = "\t'")
@@ -277,38 +278,23 @@ class ContextsHDF51001gTable(object):
         log.warn("Make sure provided array is sorted based on chromosome position")
         return(np.sort(req_inds))
 
-    def get_average_cg_chg_chh_meths(self, req_gene_ix, count_thres = 10):
-        """
-        Function to calculate the average CG, CHG and CHH methylation
-        input: 
-        req_gene_ix: numpy array of bed postion in string, array(['Chr1,17024,18924', 'Chr1,18331,18642', 'Chr1,55676,56576', ...,
-       'Chr5,26829819,26831418', 'Chr5,26835012,26835916',
-       'Chr5,26891559,26893445'], dtype='<U32')
-       count_thres: Filter regions that have smaller than n cytosines called
-        """
+    def get_cg_chg_chh_meths(self, filter_ind):
         ## Given list of indices, function outputs average of methylations in three contexts
-        if req_gene_ix is None or len(req_gene_ix) == 0:
-            return(None)
-        t_meths = self.get_meths_req_gene(req_gene_ix, count_thres)
-        t_meths = pd.DataFrame( 
-            np.column_stack((
-                np.nanmean(t_meths['CG'], axis = 0), 
-                np.nanmean(t_meths['CHG'], axis = 0), 
-                np.nanmean(t_meths['CHH'], axis = 0) 
-            ) ), 
-            columns= ['CG', 'CHG', 'CHH'], 
-            index= t_meths['CG'].columns
-        )
-        return( t_meths )
+        if filter_ind is None or len(filter_ind) == 0:
+            return((None, None))
+        t_req_gene = pd.DataFrame( np.column_stack(( np.nanmean(self.cg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.chg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.chh.__getattr__('value', filter_ind), axis = 0))), columns=["CG","CHG","CHH"] )
+        t_n_req_gene = pd.DataFrame( np.column_stack(( np.nanmean(self.n_cg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.n_chg.__getattr__('value', filter_ind), axis = 0), np.nanmean(self.n_chh.__getattr__('value', filter_ind), axis = 0))), columns=["CG","CHG","CHH"] )
+        t_req_gene = t_req_gene.set_index( self.cg.accessions )
+        t_n_req_gene = t_n_req_gene.set_index( self.cg.accessions )
+        return((t_req_gene, t_n_req_gene))
 
-    def differential_methylation(self, accs_ix, filter_pos_ix=None, count_thres=10):
+    def differential_methylation(self, accs_ix, filter_pos_ix=None):
         ## accs_ix = [[0,1], [2,3]]
         assert len(accs_ix) == 2, "provide an array with two classes. eg. [[0,1], [2,3]]"
-        meths_all = self.get_meths_req_gene( filter_pos_ix, count_thres = count_thres )
-        req_cg = meths_all['CG'].iloc[:,accs_ix[0]].mean(axis = 1) - meths_all['CG'].iloc[:,accs_ix[1]].mean(axis = 1)
-        req_chg = meths_all['CHG'].iloc[:,accs_ix[0]].mean(axis = 1) - meths_all['CHG'].iloc[:,accs_ix[1]].mean(axis = 1)
-        req_chh = meths_all['CHH'].iloc[:,accs_ix[0]].mean(axis = 1) - meths_all['CHH'].iloc[:,accs_ix[1]].mean(axis = 1)
-        return( pd.DataFrame( np.column_stack( ( req_cg, req_chg, req_chh ) ), columns = ['CG', "CHG", 'CHH'] ) )
+        req_cg = pd.DataFrame( np.column_stack( ( np.nanmean( self.cg.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.cg.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
+        req_chg = pd.DataFrame( np.column_stack( ( np.nanmean( self.chg.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.chg.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
+        req_chh = pd.DataFrame( np.column_stack( ( np.nanmean( self.chh.__getattr__('value', filter_pos_ix )[:,accs_ix[0]], axis = 1), np.nanmean( self.chh.__getattr__('value', filter_pos_ix )[:,accs_ix[1]], axis = 1) ) ))
+        return( pd.DataFrame( np.column_stack( ( req_cg.iloc[:,0] - req_cg.iloc[:,1], req_chg.iloc[:,0] - req_chg.iloc[:,1], req_chh.iloc[:,0] - req_chh.iloc[:,1] ) ), columns = ['CG', "CHG", 'CHH'] )  )
 
     def get_meths_req_gene(self, req_gene_ix, count_thres=10):
         ##  For a given gene return a pandas dataframe methylation and number of cytosine counts

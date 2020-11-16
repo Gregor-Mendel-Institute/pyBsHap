@@ -144,7 +144,7 @@ class HDF5MethTable(object):
         # bin_bed = ['Chr1', 0, 100] or "Chr1,1,100"
         if bin_bed == '':
             return(None)
-        if type(bin_bed) is str:
+        if isinstance(bin_bed, basestring):
             t_split = bin_bed.split(",")
             assert len(t_split) == 3, "please genomic position as 'Chr1,1,100'"
             bin_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]

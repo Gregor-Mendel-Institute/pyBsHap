@@ -28,12 +28,12 @@ setup(
     install_requires=[
         "numpy >=1.9.0",
         "scipy >=0.17.0",
-        "pysam",
-        "pyfaidx",
-        "methylpy",
-        "cutadapt",
-        "biopython",
-        "scikit-allel"
+        # "pysam",
+        # "pyfaidx",
+        # "methylpy",
+        # "cutadapt",
+        # "biopython",
+        # "scikit-allel"
     ],
     entry_points={
         'console_scripts': [
