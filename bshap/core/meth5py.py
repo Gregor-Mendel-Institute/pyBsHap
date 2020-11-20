@@ -9,7 +9,6 @@ import os.path as op
 import glob
 import sys
 from . import run_bedtools
-from pygenome import fasta as ref_fasta
 from pygenome import genome
 import csv
 import itertools
@@ -31,7 +30,7 @@ class writeHDF5MethTable(object):
         """
         initilize class function
         """
-        self.fasta =  ref_fasta.ReferenceFasta(ref_fasta_file)
+        self.fasta =  genome.GenomeClass(ref_fasta_file)
         self.allc_file = allc_file
         if output_file is not None:
             self.load_allc_file()
@@ -39,7 +38,7 @@ class writeHDF5MethTable(object):
 
     def _read_allc_file(self, header = None):
         log.info("reading the allc file")
-        bsbed = pd.read_csv(self.allc_file, sep = "\t", header = None)
+        bsbed = pd.read_csv(self.allc_file, sep = "\t", header = None, dtype = {0: "str", 1: np.int64})
         if len(bsbed.columns) == 7:
             bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
         log.info("done!")
@@ -50,7 +49,6 @@ class writeHDF5MethTable(object):
         allc_bed_sorted = pd.DataFrame(columns = allc_bed.columns)
         chrpositions = np.zeros(1, dtype="int")
         log.info("sorting the bed file!")
-        allc_bed['chr'] = allc_bed['chr'].astype(str)
         for ec in self.fasta.chrs:
             t_echr = allc_bed.iloc[np.where(allc_bed['chr'] == ec)[0], :].sort_values(by='pos', ascending=True)
             allc_bed_sorted = allc_bed_sorted.append(t_echr, ignore_index=True)
@@ -95,18 +93,18 @@ class writeHDF5MethTable(object):
 #             allcBed = bsbed
 #     return((allcBed, chrpositions))
 
-def load_hdf5_methylation_file(hdf5_file, ref_genome="at_tair10", bin_bed=''):
-    return HDF5MethTable(hdf5_file, ref_genome, bin_bed)
+def load_hdf5_methylation_file(hdf5_file, ref_fasta="at_tair10", bin_bed=''):
+    return HDF5MethTable(hdf5_file, ref_fasta, bin_bed)
 
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
 
-    def __init__(self,hdf5_file, ref_genome = "at_tair10", bin_bed=''):
+    def __init__(self,hdf5_file, ref_fasta = "at_tair10", bin_bed=''):
         self.h5file = h5.File(hdf5_file,'r')
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
         self.chrs = self.__getattr__('chr', self.chrpositions[0:-1])
-        self.genome =  genome.GenomeClass(ref_genome)
+        self.genome = genome.GenomeClass(ref_fasta)
 
     def close_h5file(self):
         if self.h5file is not None:
@@ -298,7 +296,7 @@ class HDF5MethTable(object):
                 outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[1], len(t_count[1])))
                 outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[2], len(t_count[2])))
                 count = count + 1
-                if count % 1000 == 0:
+                if count % 5000 == 0:
                     log.info("progress: analysed %s windows" % count)
         outmeths_cg_avg.close()
         outmeths_chg_avg.close()
