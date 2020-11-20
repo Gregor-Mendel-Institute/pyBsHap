@@ -39,7 +39,7 @@ class writeHDF5MethTable(object):
 
     def _read_allc_file(self, header = None):
         log.info("reading the allc file")
-        bsbed = pd.read_csv(self.allc_file, nrows = 100, sep = "\t", header = None)
+        bsbed = pd.read_csv(self.allc_file, sep = "\t", header = None)
         if len(bsbed.columns) == 7:
             bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
         log.info("done!")
