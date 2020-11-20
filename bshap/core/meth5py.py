@@ -9,7 +9,8 @@ import os.path as op
 import glob
 import sys
 from . import run_bedtools
-from . import genome as g
+from pygenome import fasta as ref_fasta
+from pygenome import genome
 import csv
 import itertools
 import re
@@ -21,97 +22,78 @@ def die(msg):
   sys.stderr.write('Error: ' + msg + '\n')
   sys.exit(1)
 
-def get_chrs(allc_id, allc_path):
-    #files_present = glob.glob(allc_path + "/allc_" + allc_id + "*tsv")
-    if op.isfile(allc_path + "/allc_" + allc_id + "_Chr1.tsv"):
-        return(['Chr1','Chr2','Chr3','Chr4','Chr5'])
-    elif op.isfile(allc_path + "/allc_" + allc_id + "_1.tsv"):
-        return(['1','2','3','4','5'])
-    else:
-        die("Either the allc id, %s or allc file path, %s is wrong" % (allc_id, allc_path))
+class writeHDF5MethTable(object):
+    """
+    Main class function to write hdf5 files from allc, bed files
+    """
 
-def read_allc_pandas_table(allc_file):
-    sniffer = csv.Sniffer()
-    if op.splitext(allc_file)[1] == '.gz':  ### For the new allc files
-        bsbed = pd.read_table(allc_file, header = None, compression='gzip')
-    else:
-        allc = open(allc_file, 'rb')
-        ifheader = sniffer.has_header(allc.read(4096))
-        if ifheader:
-            bsbed = pd.read_table(allc_file, header = 0)
-            return(bsbed)
-        else:
-            bsbed = pd.read_table(allc_file, header = None)
-    if len(bsbed.columns.values) == 7:
-        bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
-    else:
-        raise(NotImplementedError)
-    return(bsbed)
+    def __init__(self, allc_file, ref_fasta_file, output_file = None):
+        """
+        initilize class function
+        """
+        self.fasta =  ref_fasta.ReferenceFasta(ref_fasta_file)
+        self.allc_file = allc_file
+        if output_file is not None:
+            self.load_allc_file()
+            self.write_h5_file( output_file )
 
-def read_allc_files_chrwise(allc_id, allc_path):
-    allcBed = []
-    chrpositions = []
-    tlen = 0
-    sample_chrs = get_chrs(allc_id, allc_path)
-    for c in sample_chrs:
-        allc_file = allc_path + "/allc_" + allc_id + "_" + c + ".tsv"
-        log.info("progress: reading %s!" % allc_file)
-        chrpositions.append(tlen)
-        bsbed = read_allc_pandas_table(allc_file)
-        tlen = tlen + bsbed.shape[0]
-        try:
-            allcBed = pd.concat([allcBed, bsbed])
-        except TypeError:
-            allcBed = bsbed
-    return((allcBed, chrpositions))
-
-def generage_h5file_from_allc(allc_id, allc_path, outFile, ref_genome = "at_tair10", pval_thres=0.01):
-    genome = g.ArabidopsisGenome(ref_genome)
-    if allc_path == 'new':
+    def _read_allc_file(self, header = None):
         log.info("reading the allc file")
-        allcBed = read_allc_pandas_table(allc_id)
+        bsbed = pd.read_csv(self.allc_file, nrows = 100, sep = "\t", header = None)
+        if len(bsbed.columns) == 7:
+            bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
         log.info("done!")
-        if len(np.unique(allcBed.iloc[0:100000,6])) == 1: ### Check if the top one million is all either 1's or 0's
-            from . import bsseq
-            pval = bsseq.callMPs_allcbed(allcBed)
-            allcBed.iloc[np.where(pval > pval_thres)[0],6] = 0   ### changing the methylated column to 0 for non methylated sites.
-        allcBed_new = pd.DataFrame(columns = allcBed.columns)
+        return(bsbed)
+        
+    def load_allc_file(self):
+        allc_bed = self._read_allc_file()
+        allc_bed_sorted = pd.DataFrame(columns = allc_bed.columns)
         chrpositions = np.zeros(1, dtype="int")
         log.info("sorting the bed file!")
-        sample_chrs = np.sort(np.unique(allcBed['chr']).astype("string"))
-        sample_chrs_ix = [ genome.get_chr_ind(ec) for ec in sample_chrs ]
-        if len(np.where(np.isfinite(np.array(sample_chrs_ix, dtype="float")))[0]) != len(genome.chrs):
-            log.warn("The chromosome IDs do not match the tair IDs. Please check the file if they are suppposed to.")
-        for ec in sample_chrs:
-            allcBed_echr = allcBed.iloc[np.where(allcBed.iloc[:,0] == ec)[0], :]
-            allcBed_new = allcBed_new.append(allcBed_echr.iloc[np.argsort(np.array(allcBed_echr.iloc[:,1], dtype=int)), :] , ignore_index=True)
-            chrpositions = np.append(chrpositions, chrpositions[-1] + allcBed_echr.shape[0])
+        allc_bed['chr'] = allc_bed['chr'].astype(str)
+        for ec in self.fasta.chrs:
+            t_echr = allc_bed.iloc[np.where(allc_bed['chr'] == ec)[0], :]
+            allc_bed_sorted = allc_bed_sorted.append(t_echr.iloc[np.argsort(np.array(t_echr.iloc[:,1], dtype=int)), :] , ignore_index=True)
+            chrpositions = np.append(chrpositions, chrpositions[-1] + t_echr.shape[0])
         log.info("done!")
-        allcBed = allcBed_new
-    else:
-        (allcBed, chrpositions) = read_allc_files_chrwise(allc_id, allc_path)
-    log.info("writing a hdf5 file")
-    generate_H5File(allcBed,chrpositions, outFile)
-
-def generate_H5File(allcBed, chrpositions, outFile):
-    chunk_size = min(100000, allcBed.shape[0])
-    h5file = h5.File(outFile, 'w')
-    h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
-    h5file.create_dataset('chrpositions', data=chrpositions, shape=(len(chrpositions),),dtype='int')
-    allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total', 'methylated']
-    allc_dtypes = ['S16', 'int', 'S4', 'S8', 'int', 'int', 'int8']
-    ## Going through all the columns
-    for cols, coltype in zip(allc_columns, allc_dtypes):
-        h5file.create_dataset(cols, compression="gzip", data=np.array(allcBed[cols],dtype=coltype), shape=(allcBed.shape[0],), chunks = ((chunk_size,)))
-    if allcBed.shape[1] > 7:
-        for i in range(7,allcBed.shape[1]):
-            try:
-                h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]]), shape=(allcBed.shape[0],),chunks = ((chunk_size,)))
-            except TypeError:
-                h5file.create_dataset(allcBed.columns[i], compression="gzip", data=np.array(allcBed[allcBed.columns[i]],dtype="S8"), shape=(allcBed.shape[0],),chunks = ((chunk_size,)))
-    h5file.close()
+        self.allc_bed = allc_bed_sorted
+        self.chrpositions = chrpositions
 
 
+    def write_h5_file(self, output_file):
+        chunk_size = min(100000, self.allc_bed.shape[0])
+        h5file = h5.File(output_file, 'w')
+        h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
+        h5file.create_dataset('chrpositions', data=self.chrpositions, shape=(len(self.chrpositions),),dtype='int')
+        allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total', 'methylated']
+        allc_dtypes = ['S16', 'int', 'S4', 'S8', 'int', 'int', 'int8']
+        ## Going through all the columns
+        for cols, coltype in zip(allc_columns, allc_dtypes):
+            h5file.create_dataset(cols, compression="gzip", data=np.array(self.allc_bed[cols],dtype=coltype), shape=(self.allc_bed.shape[0],), chunks = ((chunk_size,)))
+        if self.allc_bed.shape[1] > 7:
+            for i in range(7,self.allc_bed.shape[1]):
+                try:
+                    h5file.create_dataset(self.allc_bed.columns[i], compression="gzip", data=np.array(self.allc_bed[self.allc_bed.columns[i]]), shape=(self.allc_bed.shape[0],),chunks = ((chunk_size,)))
+                except TypeError:
+                    h5file.create_dataset(self.allc_bed.columns[i], compression="gzip", data=np.array(self.allc_bed[self.allc_bed.columns[i]],dtype="S8"), shape=(self.allc_bed.shape[0],),chunks = ((chunk_size,)))
+        h5file.close()
+
+# def read_allc_files_chrwise(allc_id, allc_path):
+#     allcBed = []
+#     chrpositions = []
+#     tlen = 0
+#     sample_chrs = get_chrs(allc_id, allc_path)
+#     for c in sample_chrs:
+#         allc_file = allc_path + "/allc_" + allc_id + "_" + c + ".tsv"
+#         log.info("progress: reading %s!" % allc_file)
+#         chrpositions.append(tlen)
+#         bsbed = read_allc_pandas_table(allc_file)
+#         tlen = tlen + bsbed.shape[0]
+#         try:
+#             allcBed = pd.concat([allcBed, bsbed])
+#         except TypeError:
+#             allcBed = bsbed
+#     return((allcBed, chrpositions))
 
 def load_hdf5_methylation_file(hdf5_file, ref_genome="at_tair10", bin_bed=''):
     return HDF5MethTable(hdf5_file, ref_genome, bin_bed)
@@ -124,7 +106,7 @@ class HDF5MethTable(object):
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
         self.chrs = self.__getattr__('chr', self.chrpositions[0:-1])
-        self.genome =  g.ArabidopsisGenome(ref_genome)
+        self.genome =  genome.ArabidopsisGenome(ref_genome)
 
     def close_h5file(self):
         if self.h5file is not None:
@@ -351,22 +333,6 @@ class HDF5MethTable(object):
         outmeths_chh_avg.close()
         log.info("done!")
 
-def load_input_meths(inFile, allc_path, ref_genome):
-    assert op.isfile(inFile), "input file is not present"
-    _,inType = op.splitext(inFile)
-    if inType == '.hdf5':
-        log.info("reading hdf5 file!")
-        meths = load_hdf5_methylation_file(inFile, ref_genome)
-        log.info("done!")
-        return(meths)
-    outhdf5 = op.splitext(op.splitext(inFile)[0])[0] + ".hdf5"
-    if len(re.compile(".tsv.gz$").findall(inFile)) > 0:
-        log.info("generating hdf5 file from allc files, %s!" % outhdf5)
-        generage_h5file_from_allc(inFile, "new", outhdf5)
-    log.info("loading the hdf5 file %s!" % outhdf5)
-    meths = load_hdf5_methylation_file(outhdf5, ref_genome)
-    log.info("done!")
-    return(meths)
 
 def potatoskin_methylation_averages(args):
     # bin_bed = Chr1,1,100
@@ -375,7 +341,7 @@ def potatoskin_methylation_averages(args):
         run_bedtools.get_genomewide_methylation_average(args)
         log.info("finished!")
         return(0)
-    meths = load_input_meths(args['inFile'], args['allc_path'], args['ref_genome'])
+    meths = load_hdf5_methylation_file(args['inFile'], args['ref_genome']) 
     if args['required_region'] == '0,0,0':
         meths.generate_meth_average_in_windows(args['outFile'], args['window_size'], category=args['category'])
         return(0)

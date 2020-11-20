@@ -69,6 +69,13 @@ def get_options(program_license,program_version_message):
     t1001gparser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     t1001gparser.set_defaults(func=generate_hdf5)
 
+    meth_h5_p = subparsers.add_parser('allc_to_hdf5', help="Generate h5 file from allc")
+    meth_h5_p.add_argument("-i", "--input_allc", dest="in_allc", help="Input allc file", required=True)
+    meth_h5_p.add_argument("-f", dest="ref_fasta", type=str, help="Path for reference fasta file")
+    meth_h5_p.add_argument("-o", "--output", dest="output_file", help="output file.")
+    meth_h5_p.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+    meth_h5_p.set_defaults(func=write_meth_h5file)
+
     permeth_parser = subparsers.add_parser('methylation_percentage', help="Get methylation percentage on the given bin position.")
     permeth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files", required=True)
     permeth_parser.add_argument("-a", "--allc_path", dest="allc_path", help="Provide this option when you need to create hdf5 file from allc file. 1) Bash path, allc files from this path with sample ID are used.", default="")
@@ -157,6 +164,9 @@ def mergeallc(args):
     log.info("done!")
     meths_list = meth5py.derive_common_context_positions(meths_list)
     meth5py.write_combined_h5_permeths(meths_list, args['outFile'], read_threshold=args['read_threshold'])
+
+def write_meth_h5file(args):
+    meth5py.writeHDF5MethTable( args['in_allc'], args['ref_fasta'], args['output_file'])
 
 def generate_hdf5(args):
     writeh5 = the1001g.WriteHDF51001Table(args['file_paths'], args['output_file'])

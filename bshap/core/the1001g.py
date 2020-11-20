@@ -11,7 +11,7 @@ from . import run_bedtools
 import itertools
 import pybedtools as pybed
 
-from . import genome as g
+from pygenome import genome as g
 genome = g.ArabidopsisGenome()
 
 log = logging.getLogger(__name__)
