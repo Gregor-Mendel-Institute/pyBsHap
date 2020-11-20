@@ -52,8 +52,8 @@ class writeHDF5MethTable(object):
         log.info("sorting the bed file!")
         allc_bed['chr'] = allc_bed['chr'].astype(str)
         for ec in self.fasta.chrs:
-            t_echr = allc_bed.iloc[np.where(allc_bed['chr'] == ec)[0], :]
-            allc_bed_sorted = allc_bed_sorted.append(t_echr.iloc[np.argsort(np.array(t_echr.iloc[:,1], dtype=int)), :] , ignore_index=True)
+            t_echr = allc_bed.iloc[np.where(allc_bed['chr'] == ec)[0], :].sort_values(by='pos', ascending=True)
+            allc_bed_sorted = allc_bed_sorted.append(t_echr, ignore_index=True)
             chrpositions = np.append(chrpositions, chrpositions[-1] + t_echr.shape[0])
         log.info("done!")
         self.allc_bed = allc_bed_sorted
