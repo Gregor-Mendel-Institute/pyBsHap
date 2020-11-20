@@ -8,7 +8,7 @@ import logging
 import pandas as pd
 
 log = logging.getLogger(__name__)
-from . import genome
+from pygenome import genome
 tair10 = genome.ArabidopsisGenome()
 
 def identify_positions_given_names(in_file, araport11_file):
