@@ -106,7 +106,7 @@ class HDF5MethTable(object):
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
         self.chrs = self.__getattr__('chr', self.chrpositions[0:-1])
-        self.genome =  genome.ArabidopsisGenome(ref_genome)
+        self.genome =  genome.GenomeClass(ref_genome)
 
     def close_h5file(self):
         if self.h5file is not None:

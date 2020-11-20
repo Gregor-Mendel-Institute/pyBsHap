@@ -12,7 +12,7 @@ import itertools
 import pybedtools as pybed
 
 from pygenome import genome as g
-genome = g.ArabidopsisGenome()
+genome = g.GenomeClass("at_tair10")
 
 log = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 from pygenome import genome
-tair10 = genome.ArabidopsisGenome()
+tair10 = genome.GenomeClass("at_tair10")
 
 def identify_positions_given_names(in_file, araport11_file):
     if araport11_file is None:
