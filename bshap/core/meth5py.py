@@ -225,7 +225,7 @@ class HDF5MethTable(object):
         for t in range(required_bed[1], required_bed[2], window_size):
             skipped = True
             result = []
-            bin_bed = [int(t), int(t) + window_size - 1]
+            bin_bed = [int(t), min(required_bed[2], int(t) + window_size - 1)]
             for epos in filter_pos[ind:]:
                 if epos >= bin_bed[0]:
                     if epos <= bin_bed[1]:
