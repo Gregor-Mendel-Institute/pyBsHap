@@ -33,9 +33,9 @@ class WriteHDF51001Table(object):
     def _read_bg_file(bg_file, value_column, header = False, delimiter = "\t"):
         ## Also provide the column which value contains    
         if header:
-            e_bg = pd.read_csv(bg_file, header = 0, sep= delimiter)
+            e_bg = pd.read_csv(bg_file, header = 0, sep= delimiter,  dtype = {0: str, 1: np.int32, 2: np.int32})
         else:
-            e_bg = pd.read_csv(bg_file, header = None, sep= delimiter)
+            e_bg = pd.read_csv(bg_file, header = None, sep= delimiter, dtype = {0: str, 1: np.int32, 2: np.int32})
         e_bg.rename(columns={0:'chr',1:'start',2:'end', value_column - 1:'value' }, inplace=True)
         return(e_bg)
 
@@ -77,9 +77,9 @@ class WriteHDF51001Table(object):
             if ef_ind % 50 == 0 and ef_ind > 0:
                 log.info("written %s files into h5file" % ef_ind)
         # h5file.create_dataset('chr', shape=(n_rows,), data = np.array([genome.chrs[e] for e in genome.get_chr_ind(base_bg['chr']) ]) )
-        h5file.create_dataset('chr', shape=(n_rows,), data = np.array(base_bg['chr'], dtype = "str") )
-        h5file.create_dataset('start', shape=(n_rows,), data = np.array(base_bg['start'], dtype='int'))
-        h5file.create_dataset('end', shape=(n_rows,), data = np.array(base_bg['end'], dtype='int'))
+        h5file.create_dataset('chr', shape=(n_rows,), data = base_bg['chr'].values.astype('S') )
+        h5file.create_dataset('start', shape=(n_rows,), data = base_bg['start'].values)
+        h5file.create_dataset('end', shape=(n_rows,), data = base_bg['end'].values)
         h5file['value'][:,0] = np.array(base_bg['value'])
         h5file.close()
         log.info("done")
