@@ -49,8 +49,10 @@ class WriteHDF51001Table(object):
         elif len(np.unique(input_ids.iloc[:,1])) == len(self.input_file):
             input_ids = np.array(input_ids.iloc[:,1], dtype="str")
         else:
-            input_ids = np.array(input_ids.iloc[:,0] + input_ids.iloc[:,1], dtype="str")
-        return(input_ids)
+            nunique = input_ids.apply(pd.Series.nunique)
+            cols_to_join = nunique[nunique != 1].index
+            input_ids = input_ids[cols_to_join].agg(split_str.join, axis=1)
+        return(input_ids.values)
 
     def write_h5_multiple_files(self, value_column = 4):
         ## self.input_file is an array of files
@@ -59,7 +61,7 @@ class WriteHDF51001Table(object):
         log.info("writing a h5 file for %s bdg files into %s" % (num_lines, self.output_file))
         h5file = h5.File(self.output_file, 'w')
         h5file.create_dataset('files', data=np.array(self.input_file).astype("S"), shape=(num_lines,))
-        h5file.create_dataset('accessions', data = np.array(self.parse_accs_ids_input_file(), h5.special_dtype(vlen=str)))
+        h5file.create_dataset('accessions', data = self.parse_accs_ids_input_file(), dtype = h5.special_dtype(vlen=bytes) )
         base_bg = self._read_bg_file(self.input_file[0], value_column)
         n_rows = base_bg.shape[0]
         if n_rows < self.chunk_size:
@@ -126,7 +128,7 @@ class HDF51001gTable(object):
     def __init__(self,hdf5_file):
         self.h5file = h5.File(hdf5_file,'r')
         self.chunk_size = self.h5file['chunk_size'][0]
-        self.accessions = np.array(self.h5file['accessions']).astype('U13')
+        self.accessions = np.array(self.h5file['accessions']).astype('U')
 
     def __getattr__(self, name, filter_pos_ix=None, return_np=False):
         if name not in ['chr', 'start', 'end', 'value']:
