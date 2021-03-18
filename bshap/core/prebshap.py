@@ -414,7 +414,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
             outstat.write("%s,%s,%s,%s,%s,%s\n" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
-    return(0)
+    return(frac_mhl)
 
 def potato_mhl_calc(args):
     log.info("loading the input files!")
@@ -436,7 +436,6 @@ def potato_mhl_calc(args):
         required_region = args['reqRegion'].split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), args['window_size']]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        import ipdb; ipdb.set_trace()
         get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat)
         log.info("finished!")
         return(0)
