@@ -24,17 +24,18 @@ def die(msg):
 
 def getChrs(inBam):
     chrs = np.array([x['SN'] for x in inBam.header['SQ']])
-    chrs1d = np.char.replace(np.core.defchararray.lower(np.array(chrs, dtype="string")), "chr", "")
     chrslen = np.array([x['LN'] for x in inBam.header['SQ']])
-    reqchrs = chrs[np.where(np.char.isdigit(chrs1d))[0]].tolist()
-    reqchrslen = chrslen[np.where(np.char.isdigit(chrs1d))[0]].tolist()
-    binLen = np.zeros(0, dtype = int)
-    for tread in inBam.fetch(reqchrs[0], 0, reqchrslen[0]):
-        binLen = np.append(binLen, tread.infer_query_length())
-        if len(binLen) >= 100:
-            break
-    #return (reqchrs, reqchrslen, int(np.nanmean(binLen)))
-    return(chrs, chrslen, int(np.nanmean(binLen)))
+    return( (chrs, chrslen) )
+    # chrs1d = np.char.replace(np.core.defchararray.lower(np.array(chrs, dtype="str")), "chr", "")
+    # reqchrs = chrs[np.where(np.char.isdigit(chrs1d))[0]].tolist()
+    # reqchrslen = chrslen[np.where(np.char.isdigit(chrs1d))[0]].tolist()
+    # binLen = np.zeros(0, dtype = int)
+    # for tread in inBam.fetch(reqchrs[0], 0, reqchrslen[0]):
+    #     binLen = np.append(binLen, tread.infer_query_length())
+    #     if len(binLen) >= 100:
+    #         break
+    # #return (reqchrs, reqchrslen, int(np.nanmean(binLen)))
+    # return(chrs, chrslen, int(np.nanmean(binLen)))
 
 def get_reverse_complement(seq):
     old_chars = "ACGT"
@@ -108,10 +109,10 @@ def getMatchedSeq(binread, tair10, bin_bed):
         (i, rind) = binread.get_aligned_pairs()[ind]
         if i is not None and rind is not None:
             rseq = rseq + binread.seq[i]
-            refseq = refseq + tair10[bin_bed[0]][rind].seq.encode('ascii')
+            refseq = refseq + tair10[bin_bed[0]][rind].seq
         elif i is None and rind is not None:
             rseq = rseq + '-'
-            refseq = refseq + tair10[bin_bed[0]][rind].seq.encode('ascii')
+            refseq = refseq + tair10[bin_bed[0]][rind].seq
         elif rind is None and i is not None:
             rseq = rseq + binread.seq[i]
             refseq = refseq + '-'
@@ -210,7 +211,7 @@ def getMethGenome(bamFile, fastaFile, outFile, interesting_region='0,0,0'):
     ## make sure the binLen is less than the read length
     log.info("loading the input files!")
     inBam = pysam.AlignmentFile(bamFile, "rb")
-    (chrs, chrslen, binLen) = getChrs(inBam)
+    (chrs, chrslen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
     log.info("finished!")
     meths = h5py.File('meths.' + outFile + '.hdf5', 'w')
@@ -246,7 +247,7 @@ def getMethsRegions(bamFile, fastaFile, outFile, regionsFile):
     ## it should be tab delimited
     log.info("loading the input files!")
     inBam = pysam.AlignmentFile(bamFile, "rb")
-    (chrs, chrslen, binLen) = getChrs(inBam)
+    (chrs, chrslen) = getChrs(inBam)
     tair10 = Fasta(fastaFile)
     log.info("done!")
     outTxt = open('meths.' + outFile + '.summary.txt', 'w')
@@ -390,7 +391,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
     meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
     for bins, temp_meth_bins in zip(estimated_bins, meths_bins) :        ## sliding windows with window_size
         progress_bins += 1
-        cs_hap_bins = np.zeros(0, dtype="string")
+        cs_hap_bins = np.zeros(0, dtype="str")
         bin_bed = [required_bed[0], bins, bins + window_size - 1]
         for binread in inBam.fetch(str(bin_bed[0]), bin_bed[1], bin_bed[2]):
             r_strand = getStrandPE(binread)
@@ -402,7 +403,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
-        wma_win = meth5py.MethylationSummaryStats(meths, temp_meth_bins[1], 1)
+        wma_win = meths.MethylationSummaryStats(temp_meth_bins[1], 1)
         if wma_win == 0 or np.isnan(wma_win):
             frac_mhl = mhl_value
         else:
@@ -422,23 +423,20 @@ def potato_mhl_calc(args):
         meths = meth5py.load_hdf5_methylation_file(args['inhdf5'])
     else:
         meths = ''
-    (chrs, chrslen, binLen) = getChrs(inBam)
+    (chrs, chrslen) = getChrs(inBam)
     tair10 = Fasta(args['fastaFile'])
-    if args['window_size'] is None:
-        window_size = binLen
-    else:
-        window_size = args['window_size']
     log.info("done!")
     if args['outFile'] != "STDOUT":
         outstat = open(args['outFile'], 'w')
-        outstat.write("chr,start,end,mhl_stat,wma_win,counts\n")
+        outstat.write("chr,start,end,mhl_stat,wma_win,nreads\n")
     else:
         outstat = ''
-        print("chr,start,end,mhl_stat,wma_win,counts")
+        print("chr,start,end,mhl_stat,wma_win,nreads")
     if args['reqRegion'] != '0,0,0':
         required_region = args['reqRegion'].split(',')
-        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), window_size]
+        required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), args['window_size']]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
+        import ipdb; ipdb.set_trace()
         get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat)
         log.info("finished!")
         return(0)
