@@ -409,7 +409,7 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
         else:
             frac_mhl = mhl_value
         if outstat == '':
-            print(("%s,%s,%s,%s,%s,%s" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins)))
+            print(("%s,%s,%s,%s,%s,%s" % (bin_bed[0], str(bin_bed[1] + 1), str(bin_bed[2] + 1), frac_mhl, wma_win, no_cs_hap_bins)))
         else:
             outstat.write("%s,%s,%s,%s,%s,%s\n" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
         if progress_bins % 1000 == 0:
