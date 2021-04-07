@@ -4,6 +4,7 @@ import pysam
 from pyfaidx import Fasta
 import logging
 import numpy as np
+import pandas as pd
 import re
 import h5py
 import string
@@ -384,11 +385,13 @@ def calculate_mhl(cs_hap_bins):
 def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
     window_size = required_bed[3]
     read_length_thres = window_size/2
-    bin_start = required_bed[1] - (required_bed[1] % window_size)
+    # bin_start = required_bed[1] - (required_bed[1] % window_size)
+    bin_start = required_bed[1]# - (required_bed[1] % window_size)
     estimated_bins = list(range(bin_start, required_bed[2], window_size))
     progress_bins = 0
     #### iter meths in the required bed.
     meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
+    frac_mhl = pd.DataFrame( columns=["chr", "start", "end", "mhl", "wma", "num_reads"] )
     for bins, temp_meth_bins in zip(estimated_bins, meths_bins) :        ## sliding windows with window_size
         progress_bins += 1
         cs_hap_bins = np.zeros(0, dtype="str")
@@ -402,15 +405,16 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
             cs_bin = getCs_seq_record(rseq_record, r_strand)
             if len(cs_bin) > 0:
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
+            import ipdb; ipdb.set_trace()
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
         wma_win = meths.MethylationSummaryStats(temp_meth_bins[1], 1)
-        if wma_win == 0 or np.isnan(wma_win):
-            frac_mhl = mhl_value
-        else:
-            frac_mhl = mhl_value
-        if outstat == '':
-            print(("%s,%s,%s,%s,%s,%s" % (bin_bed[0], str(bin_bed[1] + 1), str(bin_bed[2] + 1), frac_mhl, wma_win, no_cs_hap_bins)))
-        else:
+        frac_mhl.loc[progress_bins, "chr"] = bin_bed[0]
+        frac_mhl.loc[progress_bins, "start"] = bin_bed[1] + 1
+        frac_mhl.loc[progress_bins, "end"] = bin_bed[2] + 1
+        frac_mhl.loc[progress_bins, "mhl"] = mhl_value
+        frac_mhl.loc[progress_bins, "wma"] = wma_win
+        frac_mhl.loc[progress_bins, "num_reads"] = no_cs_hap_bins
+        if outstat != '':  ### Write to a file, if given
             outstat.write("%s,%s,%s,%s,%s,%s\n" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
