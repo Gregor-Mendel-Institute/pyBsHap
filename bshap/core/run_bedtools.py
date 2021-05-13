@@ -6,6 +6,7 @@ import numpy as np
 from subprocess import Popen, PIPE
 import logging
 import pandas as pd
+import pybedtools as pybed
 
 log = logging.getLogger(__name__)
 from pygenome import genome
@@ -19,28 +20,34 @@ def identify_positions_given_names(in_file, araport11_file):
     req_bed_df = araport11.loc[araport11[3].isin(bed_names),]
     return(req_bed_df)
 
-def get_filter_bed_ix(bed_file, input_bed, just_names=True, araport11_file=None):
-    ## Here input_bed is a pandas dataframe
-    import pybedtools as pybed
-    if not isinstance(input_bed, pd.DataFrame):
-        raise(NotImplementedError)
-    ## In case of just_names the the bed_file contains only names
-    if not os.path.isfile(bed_file):
-        raise NameError("file is not present, check file name")
-    if just_names:
-        req_bed_df = identify_positions_given_names(bed_file, araport11_file)
-        req_bed = pybed.BedTool.from_dataframe(req_bed_df.iloc[:,[0,1,2]])
+def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_file=None):
+    ## here query_bed is either a file or a pandas dataframe
+    if isinstance(query_bed, str):
+        if os.path.isfile(query_bed):
+            queryBed = pybed.BedTool(query_bed)
+    elif isinstance(query_bed, pd.DataFrame):
+        queryBed = pybed.BedTool.from_dataframe(query_bed.iloc[:,[0,1,2]])
     else:
-        req_bed = pybed.BedTool(bed_file)
-    inBed = pybed.BedTool.from_dataframe(input_bed.iloc[:,[0,1,2]])
+        raise(NotImplementedError("either input a bed file or pandas dataframe for query"))
+    if isinstance(reference_bed, str):
+        if os.path.isfile(reference_bed):
+            refBed = pybed.BedTool(reference_bed)
+    elif just_names:
+        reference_bed_df = identify_positions_given_names(reference_bed, araport11_file)
+        refBed = pybed.BedTool.from_dataframe(reference_bed_df.iloc[:,[0,1,2]])
+    elif isinstance(reference_bed, pd.DataFrame):
+        refBed = pybed.BedTool.from_dataframe(reference_bed.iloc[:,[0,1,2]])
+    else:
+        raise(NotImplementedError("either input a bed file or pandas dataframe for reference"))
     ## Just taking first three columns for bedtools
-    union_pyBed = inBed.intersect(req_bed, wa=True)
-    if union_pyBed.count() == 0:   ## Return if there are no matching lines.
+    unionBed = refBed.intersect(queryBed, wa=True)
+    if unionBed.count() == 0:   ## Return if there are no matching lines.
         return(None)
-    unionBed = union_pyBed.to_dataframe() ## wa is to return the entire bed.
-    total_cols = np.array(input_bed.iloc[:,0] + "," + input_bed.iloc[:,1].map(str) + "," +  input_bed.iloc[:,2].map(str), dtype="str")
-    unionBed_cols = np.array(unionBed["chrom"] + "," + unionBed["start"].map(str) + "," +  unionBed["end"].map(str), dtype="str")
-    return(np.where(np.in1d(total_cols, unionBed_cols))[0])
+    refBed_df = refBed.to_dataframe() 
+    refBed_ids = np.array(refBed_df.iloc[:,0].astype(str) + "," + refBed_df.iloc[:,1].astype(str) + "," +  refBed_df.iloc[:,2].astype(str), dtype="str")
+    unionBed_df = unionBed.to_dataframe() ## wa is to return the entire bed.
+    unionBed_ids = np.array(unionBed_df.iloc[:,0].astype(str) + "," + unionBed_df.iloc[:,1].astype(str) + "," +  unionBed_df.iloc[:,2].astype(str), dtype="str")
+    return(np.where(np.in1d(refBed_ids, unionBed_ids))[0])
 
 ## deprecated use the above function for all the chromosomes.
 def get_filter_pos_echr(bed_file, chrid, common_positions, just_names = True, araport11_file=None):
