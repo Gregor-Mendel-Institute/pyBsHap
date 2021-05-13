@@ -22,11 +22,15 @@ def identify_positions_given_names(in_file, araport11_file):
 
 def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_file=None):
     ## here query_bed is either a file or a pandas dataframe
+    ## we can rely on bedops -- very fast and efficient
+    # https://www.biostars.org/p/319840/
     if isinstance(query_bed, str):
         if os.path.isfile(query_bed):
             queryBed = pybed.BedTool(query_bed)
     elif isinstance(query_bed, pd.DataFrame):
         queryBed = pybed.BedTool.from_dataframe(query_bed.iloc[:,[0,1,2]])
+    elif isinstance(query_bed, pybed.bedtool.BedTool):
+        queryBed = query_bed
     else:
         raise(NotImplementedError("either input a bed file or pandas dataframe for query"))
     if isinstance(reference_bed, str):
@@ -37,17 +41,25 @@ def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_fi
         refBed = pybed.BedTool.from_dataframe(reference_bed_df.iloc[:,[0,1,2]])
     elif isinstance(reference_bed, pd.DataFrame):
         refBed = pybed.BedTool.from_dataframe(reference_bed.iloc[:,[0,1,2]])
+    elif isinstance(reference_bed, pybed.bedtool.BedTool):
+        refBed = reference_bed
     else:
         raise(NotImplementedError("either input a bed file or pandas dataframe for reference"))
+    f_newrefBed = open( refBed.fn + ".new.bed", 'w' )
+    cmd_out = Popen( ''' awk '{ print $0 "\t" NR-1 }' ''' + refBed.fn, shell=True, stdout = f_newrefBed)
+    cmd_out.wait()
+    f_newrefBed.close()
+    newRefBed = pybed.BedTool( refBed.fn + ".new.bed" )
     ## Just taking first three columns for bedtools
-    unionBed = refBed.intersect(queryBed, wa=True)
+    unionBed = newRefBed.intersect(queryBed, wa=True)
     if unionBed.count() == 0:   ## Return if there are no matching lines.
         return(None)
-    refBed_df = refBed.to_dataframe() 
-    refBed_ids = np.array(refBed_df.iloc[:,0].astype(str) + "," + refBed_df.iloc[:,1].astype(str) + "," +  refBed_df.iloc[:,2].astype(str), dtype="str")
-    unionBed_df = unionBed.to_dataframe() ## wa is to return the entire bed.
-    unionBed_ids = np.array(unionBed_df.iloc[:,0].astype(str) + "," + unionBed_df.iloc[:,1].astype(str) + "," +  unionBed_df.iloc[:,2].astype(str), dtype="str")
-    return(np.where(np.in1d(refBed_ids, unionBed_ids))[0])
+    return(unionBed.to_dataframe().iloc[:,3].values) ## third column is the index I added 
+    # refBed_df = refBed.to_dataframe() 
+    # refBed_ids = np.array(refBed_df.iloc[:,0].astype(str) + "," + refBed_df.iloc[:,1].astype(str) + "," +  refBed_df.iloc[:,2].astype(str), dtype="str")
+    # unionBed_df = unionBed.to_dataframe() ## wa is to return the entire bed.
+    # unionBed_ids = np.array(unionBed_df.iloc[:,0].astype(str) + "," + unionBed_df.iloc[:,1].astype(str) + "," +  unionBed_df.iloc[:,2].astype(str), dtype="str")
+    # return(np.where(np.in1d(refBed_ids, unionBed_ids))[0])
 
 ## deprecated use the above function for all the chromosomes.
 def get_filter_pos_echr(bed_file, chrid, common_positions, just_names = True, araport11_file=None):
