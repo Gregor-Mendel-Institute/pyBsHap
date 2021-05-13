@@ -59,7 +59,9 @@ def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_fi
     unionBed = newRefBed.intersect(newqueryBed, wa=True, wb = True)
     if unionBed.count() == 0:   ## Return if there are no matching lines.
         return(None)
-    return(unionBed.to_dataframe()) ## third column is the index I added 
+    unionBed = unionBed.to_dataframe()
+    unionBed.columns = np.array(['ref_chr', 'ref_start', 'ref_end', 'ref_ix', 'query_chr', 'query_start', 'query_end', 'query_ix'])
+    return(unionBed) ## third column is the index I added 
     # refBed_df = refBed.to_dataframe() 
     # refBed_ids = np.array(refBed_df.iloc[:,0].astype(str) + "," + refBed_df.iloc[:,1].astype(str) + "," +  refBed_df.iloc[:,2].astype(str), dtype="str")
     # unionBed_df = unionBed.to_dataframe() ## wa is to return the entire bed.
