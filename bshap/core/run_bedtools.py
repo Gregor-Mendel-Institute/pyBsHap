@@ -50,11 +50,16 @@ def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_fi
     cmd_out.wait()
     f_newrefBed.close()
     newRefBed = pybed.BedTool( refBed.fn + ".new.bed" )
+    f_newqueryBed = open( queryBed.fn + ".new.bed", 'w' )
+    cmd_out = Popen( ''' awk '{ print $0 "\t" NR-1 }' ''' + queryBed.fn, shell=True, stdout = f_newqueryBed)
+    cmd_out.wait()
+    f_newqueryBed.close()
+    newqueryBed = pybed.BedTool( queryBed.fn + ".new.bed" )
     ## Just taking first three columns for bedtools
-    unionBed = newRefBed.intersect(queryBed, wa=True)
+    unionBed = newRefBed.intersect(newqueryBed, wa=True, wb = True)
     if unionBed.count() == 0:   ## Return if there are no matching lines.
         return(None)
-    return(unionBed.to_dataframe().iloc[:,3].values) ## third column is the index I added 
+    return(unionBed.to_dataframe()) ## third column is the index I added 
     # refBed_df = refBed.to_dataframe() 
     # refBed_ids = np.array(refBed_df.iloc[:,0].astype(str) + "," + refBed_df.iloc[:,1].astype(str) + "," +  refBed_df.iloc[:,2].astype(str), dtype="str")
     # unionBed_df = unionBed.to_dataframe() ## wa is to return the entire bed.
