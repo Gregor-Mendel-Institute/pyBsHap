@@ -93,13 +93,13 @@ class writeHDF5MethTable(object):
 #             allcBed = bsbed
 #     return((allcBed, chrpositions))
 
-def load_hdf5_methylation_file(hdf5_file, ref_fasta="at_tair10", bin_bed=''):
+def load_hdf5_methylation_file(hdf5_file, ref_fasta="at_tair10", bin_bed=None):
     return HDF5MethTable(hdf5_file, ref_fasta, bin_bed)
 
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
 
-    def __init__(self,hdf5_file, ref_fasta = "at_tair10", bin_bed=''):
+    def __init__(self,hdf5_file, ref_fasta = "at_tair10", bin_bed=None):
         self.h5file = h5.File(hdf5_file,'r')
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
@@ -120,11 +120,22 @@ class HDF5MethTable(object):
         chr_inds = [self.chrpositions[req_chr_ind], self.chrpositions[req_chr_ind + 1]]
         return((req_chr_ind, chr_inds))
 
-    def get_filter_inds(self, bin_bed):
+    def get_filter_inds(self, bin_bed = None):
         # bin_bed = ['Chr1', 0, 100] or "Chr1,1,100"
-        if bin_bed == '':
+        if isinstance(bin_bed, pd.DataFrame):
+            t_chr = np.unique(bin_bed.iloc[:,0])
+            if t_chr.shape[0] == 1:
+                req_chr_ind, chr_inds = self.get_chrinds(t_chr[0])
+                refBed = self.get_bed_df(filter_pos_ix = np.arange(chr_inds[0], chr_inds[1]), full_bed=False)
+            else:
+                refBed = self.get_bed_df(filter_pos_ix = np.arange(self.__getattr__('pos').shape[0]), full_bed=False)
+            req_inds_df = run_bedtools.get_intersect_bed_ix(reference_bed=refBed, query_bed=bin_bed, just_names=False)
+            if t_chr.shape[0] == 1:
+                req_inds_df['ref_ix'] = req_inds_df['ref_ix'] + chr_inds[0]
+            return(req_inds_df)
+        elif bin_bed is None:
             return(None)
-        if type(bin_bed) is str:
+        elif isinstance(bin_bed, str):
             t_split = bin_bed.split(",")
             assert len(t_split) == 3, "please genomic position as 'Chr1,1,100'"
             bin_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
@@ -303,33 +314,49 @@ class HDF5MethTable(object):
         outmeths_chh_avg.close()
         log.info("done!")
 
-    def generate_meth_average_required_bed(self, required_bed, out_file, category=1):
-        if op.isfile(required_bed):
-            req_regions = pd.read_csv(required_bed, sep = "\t", header=None)
-        elif type(required_bed) is str:
-            ### required_bed = "Chr1,1,1000"
-            req_regions = pd.DataFrame(required_bed.split(",")).T
+    def generate_meth_average_required_bed(self, required_bed, out_file = None, category=1):
+        if type(required_bed) is str:
+            if op.isfile(required_bed):
+                req_regions = pd.read_csv(required_bed, sep = "\t", header=None)
+            else:
+                ### required_bed = "Chr1,1,1000"
+                req_regions = pd.DataFrame(required_bed.split(",")).T
         elif type(required_bed) is pd.DataFrame:
             req_regions = required_bed
         assert len(req_regions.columns) >= 3, "bed file should have minimum of 3 columns. eg., Chr, Start, End"
-        outmeths_cg_avg = open(out_file + ".CG.bg", 'w')
-        outmeths_chg_avg = open(out_file + ".CHG.bg", 'w')
-        outmeths_chh_avg = open(out_file + ".CHH.bg", 'w')
+        if out_file is not None:
+            outmeths_cg_avg = open(out_file + ".CG.bg", 'w')
+            outmeths_chg_avg = open(out_file + ".CHG.bg", 'w')
+            outmeths_chh_avg = open(out_file + ".CHH.bg", 'w')
+        output_meths = pd.DataFrame( index = req_regions.index, columns = ['cg', 'chg', 'chh'] )
+        calc_for_each = True
+        if req_regions.shape[0] > 10:
+            mat_positions = self.get_filter_inds( req_regions )
+            calc_for_each = False
         for er in req_regions.iterrows():
-            t_filter_pos_ix = self.get_filter_inds( [er[1][0], int(er[1][1]), int(er[1][2]) ] )
+            if calc_for_each:
+                t_filter_pos_ix = self.get_filter_inds( [er[1][0], int(er[1][1]), int(er[1][2]) ] )
+            else:
+                t_filter_pos_ix = mat_positions.loc[mat_positions['query_ix'] == np.where(req_regions.index.values == er[0])[0][0],'ref_ix'].values
             count = 0
             t_count = self._TotalCounts_All_Contexts( t_filter_pos_ix )
             req_meth_avg = self._AveMethylation_All_Contexts(t_filter_pos_ix, category)
-            outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[0], len(t_count[0])))
-            outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[1], len(t_count[1])))
-            outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[2], len(t_count[2])))
+            if out_file is not None:
+                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[0], len(t_count[0])))
+                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[1], len(t_count[1])))
+                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[2], len(t_count[2])))
+            output_meths.loc[er[0], 'cg'] = req_meth_avg[0]
+            output_meths.loc[er[0], 'chg'] = req_meth_avg[1]
+            output_meths.loc[er[0], 'chh'] = req_meth_avg[2]
             count = count + 1
             if count % 100 == 0:
                 log.info("progress: analysed %s regions" % count)
-        outmeths_cg_avg.close()
-        outmeths_chg_avg.close()
-        outmeths_chh_avg.close()
+        if out_file is not None:
+            outmeths_cg_avg.close()
+            outmeths_chg_avg.close()
+            outmeths_chh_avg.close()
         log.info("done!")
+        return(output_meths)
 
 
 def potatoskin_methylation_averages(args):

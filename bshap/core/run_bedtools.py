@@ -45,16 +45,16 @@ def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_fi
         refBed = reference_bed
     else:
         raise(NotImplementedError("either input a bed file or pandas dataframe for reference"))
-    f_newrefBed = open( refBed.fn + ".new.bed", 'w' )
+    f_newrefBed = open( refBed.fn + ".new.tmp", 'w' )
     cmd_out = Popen( ''' awk '{ print $0 "\t" NR-1 }' ''' + refBed.fn, shell=True, stdout = f_newrefBed)
     cmd_out.wait()
     f_newrefBed.close()
-    newRefBed = pybed.BedTool( refBed.fn + ".new.bed" )
-    f_newqueryBed = open( queryBed.fn + ".new.bed", 'w' )
+    newRefBed = pybed.BedTool( refBed.fn + ".new.tmp" )
+    f_newqueryBed = open( queryBed.fn + ".new.tmp", 'w' )
     cmd_out = Popen( ''' awk '{ print $0 "\t" NR-1 }' ''' + queryBed.fn, shell=True, stdout = f_newqueryBed)
     cmd_out.wait()
     f_newqueryBed.close()
-    newqueryBed = pybed.BedTool( queryBed.fn + ".new.bed" )
+    newqueryBed = pybed.BedTool( queryBed.fn + ".new.tmp" )
     ## Just taking first three columns for bedtools
     unionBed = newRefBed.intersect(newqueryBed, wa=True, wb = True)
     if unionBed.count() == 0:   ## Return if there are no matching lines.
