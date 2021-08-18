@@ -172,7 +172,7 @@ def calculate_mhl(cs_hap_bins):
     mhl_value_final = np.sum(mhl_value) / sum(range(ncols + 1))
     return((mhl_value_final, len(cs_hap_bins), ncols))
 
-def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
+def get_mhl_entire_bed(inBam, tair10, required_bed, outstat = ''):
     window_size = required_bed[3]
     read_length_thres = window_size/2
     # bin_start = required_bed[1] - (required_bed[1] % window_size)
@@ -180,9 +180,9 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
     estimated_bins = list(range(bin_start, required_bed[2], window_size))
     progress_bins = 0
     #### iter meths in the required bed.
-    meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
-    frac_mhl = pd.DataFrame( columns=["chr", "start", "end", "mhl", "wma"] )
-    for bins, temp_meth_bins in zip(estimated_bins, meths_bins) :        ## sliding windows with window_size
+    # meths_bins = meths.iter_bed_windows([required_bed[0], bin_start, required_bed[2]], window_size)
+    frac_mhl = pd.DataFrame( columns=["chr", "start", "end", "mhl"] )
+    for bins in estimated_bins:        ## sliding windows with window_size
         progress_bins += 1
         cs_hap_bins_directional = {}
         for etag in ['CTCT', 'GACT', 'CTGA', 'GAGA']:  ### considering all the 4 types of tags
@@ -200,19 +200,19 @@ def get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat = ''):
                 cs_hap_bins_directional[r_strand[0]] = np.append(cs_hap_bins_directional[r_strand[0]], cs_bin)
                 cs_hap_bins = np.append(cs_hap_bins, cs_bin)
         mhl_value, no_cs_hap_bins, ncols = calculate_mhl(cs_hap_bins)
-        wma_win = meths.MethylationSummaryStats(temp_meth_bins[1], 1)
+        # wma_win = meths.MethylationSummaryStats(temp_meth_bins[1], 1)
         frac_mhl.loc[progress_bins, "chr"] = bin_bed[0]
         frac_mhl.loc[progress_bins, "start"] = bin_bed[1] + 1
         frac_mhl.loc[progress_bins, "end"] = bin_bed[2] + 1
         frac_mhl.loc[progress_bins, "mhl"] = mhl_value
-        frac_mhl.loc[progress_bins, "wma"] = wma_win
-        frac_mhl.loc[progress_bins, "num_cs"] = len( temp_meth_bins[1] )
+        # frac_mhl.loc[progress_bins, "wma"] = wma_win
+        # frac_mhl.loc[progress_bins, "num_cs"] = len( temp_meth_bins[1] )
         for etag in cs_hap_bins_directional.keys():
             e_mhl_value, e_cs_bins, e_ncols = calculate_mhl(cs_hap_bins_directional[etag])
             frac_mhl.loc[progress_bins, "mhl_" + etag ] = e_mhl_value
             frac_mhl.loc[progress_bins, "nreads_" + etag ] = cs_hap_bins_directional[etag].shape
         if outstat != '':  ### Write to a file, if given
-            outstat.write("%s,%s,%s,%s,%s,%s\n" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, wma_win, no_cs_hap_bins))
+            outstat.write("%s,%s,%s,%s,%s,%s\n" % (bin_bed[0], str(bin_bed[1]), str(bin_bed[2]), frac_mhl, no_cs_hap_bins))
         if progress_bins % 1000 == 0:
             log.info("ProgressMeter - %s windows in analysed, %s total" % (progress_bins, len(estimated_bins)))
     return(frac_mhl)
@@ -237,12 +237,12 @@ def potato_mhl_calc(args):
         required_region = args['reqRegion'].split(',')
         required_bed = [required_region[0], int(required_region[1]), int(required_region[2]), args['window_size']]
         log.info("analysing region %s:%s-%s !" % (required_bed[0], required_bed[1], required_bed[2]))
-        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat)
+        get_mhl_entire_bed(inBam, tair10, required_bed, outstat)
         log.info("finished!")
         return(0)
     for cid, clen in zip(chrs, chrslen):     ## chromosome wise
         log.info("analysing chromosome: %s" % cid)
         required_bed = [cid, 1, clen, window_size]   ### 0 is to not print reads
-        get_mhl_entire_bed(inBam, meths, tair10, required_bed, outstat)
+        get_mhl_entire_bed(inBam, tair10, required_bed, outstat)
     log.info("finished!")
     return(0)
