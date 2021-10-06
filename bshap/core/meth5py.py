@@ -406,12 +406,12 @@ class HDF5MethTable(object):
                         ), 
                         'ref_ix'
                     ].values)
-            ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
-            ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
-            all_gene_meths.loc[ef_gene,:] = ef_gene_meths
-            cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths_counts[0]]
-            chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
-            chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
+                ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
+                ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
+                all_gene_meths.loc[ef_gene,:] = ef_gene_meths
+                cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths_counts[0]]
+                chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
+                chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
         if out_file is not None:
             cg_gene_meths.to_csv( out_file + ".CG.bg", sep = "\t", index = False, header = None )
             chg_gene_meths.to_csv( out_file + ".CHG.bg", sep = "\t", index = False, header = None )
