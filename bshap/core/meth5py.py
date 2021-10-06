@@ -358,6 +358,66 @@ class HDF5MethTable(object):
         log.info("done!")
         return(output_meths)
 
+    def calculate_gbm_exon_only(self, input_gff_db, gene_id, out_file = None):
+        """
+        Function to calculate gene-body methylation for a given gene ID
+        input:
+            input_gff_db:  DB file from gffutils
+            gene_id: pandas series for all the IDs
+        """
+        assert type(gene_id) == pd.Series, "please provide a pandas series for the annotation IDs"
+        t_gene_exons = pd.DataFrame( columns=['chr','start', 'end', 'geneid'] )
+        gene_start_end = pd.DataFrame(columns=['chr','start', 'end'], index = gene_id )
+        for ef_gene in gene_id:
+            gene_start_end.loc[ef_gene,:] = [input_gff_db[ef_gene].chrom, input_gff_db[ef_gene].start, input_gff_db[ef_gene].end ]
+            for i in input_gff_db.children(input_gff_db[ef_gene], featuretype='exon', order_by='start'):
+                t_gene_exons.loc[ i.id, 'geneid' ] = ef_gene
+                t_gene_exons.loc[ i.id, 'chr' ] = i.chrom
+                t_gene_exons.loc[ i.id, 'start' ] = i.start
+                t_gene_exons.loc[ i.id, 'end' ] = i.end
+        t_gene_exons['start'] = t_gene_exons['start'].astype(int)
+        t_gene_exons['end'] = t_gene_exons['end'].astype(int)
+        all_gene_meths = pd.DataFrame( columns=['cg','chg', 'chh'], index = gene_id )
+        cg_gene_meths = pd.concat([gene_start_end, pd.DataFrame( columns=['cg','ncg'], index = gene_id )], axis = 1)
+        chg_gene_meths = pd.concat([gene_start_end, pd.DataFrame( columns=['chg','nchg'], index = gene_id )], axis = 1)
+        chh_gene_meths = pd.concat([gene_start_end, pd.DataFrame( columns=['chh','nchh'], index = gene_id )], axis = 1)
+        if len(gene_id) < 100:
+            t_filter_pos_ix = np.zeros(0, dtype = int)
+            for ef_gene in gene_id:
+                ef_gene_exon = t_gene_exons.iloc[ np.where(t_gene_exons['geneid'] == ef_gene)[0],: ]
+                t_gene_cds_pos_ix = np.zeros(0, dtype = int)
+                for ef_exon in ef_gene_exon.iterrows():
+                    t_gene_cds_pos_ix = np.append(t_gene_cds_pos_ix, self.get_filter_inds( ef_exon[1].values[0:3] ))
+                t_gene_cds_pos_ix = np.unique(t_gene_cds_pos_ix)
+                ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
+                ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
+                all_gene_meths.loc[ef_gene,:] = ef_gene_meths
+                cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths_counts[0]]
+                chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
+                chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
+        else: 
+            all_genes_cds_pos_ix = self.get_filter_inds( t_gene_exons )
+            for ef_gene in gene_id:
+                t_gene_cds_pos_ix = np.unique( 
+                    all_genes_cds_pos_ix.loc[
+                        np.isin(
+                            all_genes_cds_pos_ix['query_ix'], 
+                            np.where( t_gene_exons['geneid'] == ef_gene  )[0]
+                        ), 
+                        'ref_ix'
+                    ].values)
+            ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
+            ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
+            all_gene_meths.loc[ef_gene,:] = ef_gene_meths
+            cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths_counts[0]]
+            chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
+            chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
+        if out_file is not None:
+            cg_gene_meths.to_csv( out_file + ".CG.bg", sep = "\t", index = False, header = None )
+            chg_gene_meths.to_csv( out_file + ".CHG.bg", sep = "\t", index = False, header = None )
+            chh_gene_meths.to_csv( out_file + ".CHH.bg", sep = "\t", index = False, header = None )
+        return(all_gene_meths)
+
 
 def potatoskin_methylation_averages(args):
     # bin_bed = Chr1,1,100
@@ -373,3 +433,13 @@ def potatoskin_methylation_averages(args):
     meths.generate_meth_average_required_bed(args['required_region'], args['outFile'], args['category'])
     log.info('finished!')
     return(0)
+
+
+def potatoskin_calculate_gbm_exon_only(args):
+    import gffutils
+    meths = load_hdf5_methylation_file(args['inFile'], args['ref_genome']) 
+    ## Generate a gffutils DB from the a GFF annotation file (check documentation for gffutils)
+    ## Assuming 4th column is the gene ID from a bed file
+    gff_db = gffutils.FeatureDB(args['gffutils_db'], keep_order=True)
+    gene_bed = pd.read_csv( args['gene_bed'], header = None, sep = "\t" )
+    t = meths.calculate_gbm_exon_only(gff_db, pd.Series(gene_bed.iloc[:,3].values), args['outFile'])

@@ -87,6 +87,15 @@ def get_options(program_license,program_version_message):
     permeth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     permeth_parser.set_defaults(func=bsseq_meth_average)
 
+    cds_meth_parser = subparsers.add_parser('methylation_percentage_cds', help="Get methylation percentage on CDS for given genes")
+    cds_meth_parser.add_argument("-i", "--input_file", dest="inFile", help="Input methylation HDF5 file generated from allc files", required=True)
+    cds_meth_parser.add_argument("-g", "--gene_bed", dest="gene_bed", help="Bed file for the genes containing gene ID on 4th column", required = True)
+    cds_meth_parser.add_argument("-db", "--gffutils_db", dest="gffutils_db", help="gffutils DB, binary file generated from the package.", required = True )
+    cds_meth_parser.add_argument("-o", "--output", dest="outFile", help="output file prefix")
+    cds_meth_parser.add_argument("--ref_genome", dest="ref_genome", default="at_tair10", type=str, help="Path for reference fasta file")
+    cds_meth_parser.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+    cds_meth_parser.set_defaults(func=bsseq_cds_meth_average)
+
     makeCombiAllc = subparsers.add_parser('mergeallc', help = "Merge input allc files from hdf5 format")
     makeCombiAllc.add_argument("-i", dest = "inFiles", nargs='+', help = "Give a list of allc files (hdf5) in here")
     makeCombiAllc.add_argument("-o", dest = "outFile", help = "output hdf5 file combining all the allc")
@@ -203,6 +212,9 @@ def lowfindfind(args):
 
 def bsseq_meth_average(args):
     meth5py.potatoskin_methylation_averages(args)
+
+def bsseq_cds_meth_average(args):
+    meth5py.potatoskin_calculate_gbm_exon_only(args)
 
 
 def main():
