@@ -51,8 +51,8 @@ class WriteHDF51001Table(object):
         else:
             nunique = input_ids.apply(pd.Series.nunique)
             cols_to_join = nunique[nunique != 1].index
-            input_ids = input_ids[cols_to_join].agg(split_str.join, axis=1)
-        return(input_ids.values)
+            input_ids = (input_ids[cols_to_join].agg(split_str.join, axis=1)).values
+        return(input_ids)
 
     def write_h5_multiple_files(self, value_column = 4):
         ## self.input_file is an array of files
@@ -61,7 +61,7 @@ class WriteHDF51001Table(object):
         log.info("writing a h5 file for %s bdg files into %s" % (num_lines, self.output_file))
         h5file = h5.File(self.output_file, 'w')
         h5file.create_dataset('files', data=np.array(self.input_file).astype("S"), shape=(num_lines,))
-        h5file.create_dataset('accessions', data = self.parse_accs_ids_input_file(), dtype = h5.special_dtype(vlen=bytes) )
+        h5file.create_dataset('accessions', data = np.array(self.parse_accs_ids_input_file(), dtype = 'S'))
         base_bg = self._read_bg_file(self.input_file[0], value_column)
         n_rows = base_bg.shape[0]
         if n_rows < self.chunk_size:
@@ -201,7 +201,7 @@ class HDF51001gTable(object):
 
     def get_inds_overlap_region_file(self, region_file, just_names=False, araport11_file=None):
         whole_bed = self.get_bed_df(None)
-        return(run_bedtools.get_filter_bed_ix(region_file, whole_bed, just_names=just_names, araport11_file=araport11_file))
+        return(run_bedtools.get_intersect_bed_ix(region_file, whole_bed, just_names=just_names, araport11_file=araport11_file))
 
     def get_inds_matching_region(self, region_bed):
         # returns values given region_bed (a pd dataframe with chr, start and end)
