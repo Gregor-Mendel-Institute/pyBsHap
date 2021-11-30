@@ -311,6 +311,23 @@ class ContextsHDF51001gTable(object):
         req_chg = meths_all['CHG'].iloc[:,accs_ix[0]].mean(axis = 1) - meths_all['CHG'].iloc[:,accs_ix[1]].mean(axis = 1)
         req_chh = meths_all['CHH'].iloc[:,accs_ix[0]].mean(axis = 1) - meths_all['CHH'].iloc[:,accs_ix[1]].mean(axis = 1)
         return( pd.DataFrame( np.column_stack( ( req_cg, req_chg, req_chh ) ), columns = ['CG', "CHG", 'CHH'] ) )
+    
+    def group_sample_methylation(self, accs_groups, filter_pos_ix=None, count_thres = 10):
+        assert type(accs_groups) is pd.Series, "please provide a pandas series with index as sample id and group as value"
+        meths_all = self.get_meths_req_gene( filter_pos_ix, count_thres = count_thres )
+        req_groups = accs_groups.unique()
+        meths_grouped = {}
+        for ef_context in ['CG', 'CHG', 'CHH']:
+            meths_grouped[ef_context] = pd.DataFrame(columns = req_groups, index = meths_all[ef_context].index )
+            # meths_grouped[ef_context + ".var"] = pd.DataFrame(columns = req_groups, index = meths_all.index )
+
+        for ef_group in req_groups:
+            ef_samples = accs_groups.index[accs_groups == ef_group]
+            for ef_context in ['CG', 'CHG', 'CHH']:
+                ef_context_group_meths = meths_all[ef_context].loc[:,ef_samples]
+                meths_grouped[ef_context].loc[:,ef_group] = ef_context_group_meths.mean(axis = 1)
+                # meths_grouped[ef_context + ".var"].loc[:,ef_group] = ef_context_group_meths.mean(axis = 1)
+        return( meths_grouped )
 
     def get_meths_req_gene(self, req_gene_ix, count_thres=10):
         ##  For a given gene return a pandas dataframe methylation and number of cytosine counts
