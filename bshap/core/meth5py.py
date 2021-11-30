@@ -103,7 +103,6 @@ class HDF5MethTable(object):
         self.h5file = h5.File(hdf5_file,'r')
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
-        self.chrs = self.__getattr__('chr', self.chrpositions[0:-1])
         self.genome = genome.GenomeClass(ref_fasta)
 
     def close_h5file(self):
@@ -112,7 +111,7 @@ class HDF5MethTable(object):
 
     def get_chrinds(self, chrid):
         chrid_mod = str(chrid).replace("Chr", "").replace("chr", "")
-        real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.chrs ] )
+        real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.__getattr__('chr', self.chrpositions[0:-1]) ] )
         req_chr_ind = np.where(real_chrs == chrid_mod)[0]
         if len( req_chr_ind ) == 0:
             return( (None, None) )
@@ -175,12 +174,15 @@ class HDF5MethTable(object):
     def get_bed_df(self, filter_pos_ix, full_bed=False, read_threshold=0):
         req_chrs = self.__getattr__('chr', filter_pos_ix, return_np=True)
         req_pos = self.__getattr__('pos', filter_pos_ix, return_np=True)
+        conname = self.__getattr__('mc_class', filter_pos_ix, return_np=True )
+        strand = self.__getattr__('strand', filter_pos_ix, return_np=True)
+        mc_df = pd.DataFrame(np.column_stack((req_chrs, req_pos, req_pos + 1, conname, strand)), columns=['chr', 'start', 'end', 'mc_class', 'strand'])
         if full_bed:
-            conname = self.__getattr__('mc_class', filter_pos_ix, return_np=True )
-            strand = self.__getattr__('strand', filter_pos_ix, return_np=True)
-            permeth = self.get_permeths(filter_pos_ix, read_threshold=read_threshold)
-            return(pd.DataFrame(np.column_stack((req_chrs, req_pos, req_pos + 1, conname, permeth, strand)), columns=['chr', 'start', 'end', 'mc_class', 'permeth', 'strand']))
-        return(pd.DataFrame(np.column_stack((req_chrs, req_pos, req_pos + 1)), columns=['chr', 'start', 'end']))
+            # mc_df['permeth'] = self.get_permeths(filter_pos_ix, read_threshold=read_threshold)
+            mc_df['mc_count'] = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
+            mc_df['mc_total'] = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
+        return(mc_df)
+        
 
     def get_req_mc_class_ix(self, req_context, filter_pos_ix):
         if filter_pos_ix is None or len(filter_pos_ix) == 0:
