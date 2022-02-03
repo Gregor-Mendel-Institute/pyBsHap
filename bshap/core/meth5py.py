@@ -154,9 +154,10 @@ class HDF5MethTable(object):
         if name in ['pos', 'position', 'positions']:
             name = 'pos'
         if filter_pos_ix is None:
-            if return_np:
-                return(np.array(self.h5file[str(name)]))
-            return(self.h5file[str(name)])
+            if return_np: 
+                ret_attr = np.array( self.h5file[str(name)] )
+            else:
+                return( self.h5file[str(name)] )
         elif type(filter_pos_ix) is np.ndarray:
             if len(filter_pos_ix) == 0:
                 ret_attr = np.array(())
@@ -166,7 +167,7 @@ class HDF5MethTable(object):
         else:
             ret_attr = np.array(self.h5file[str(name)][filter_pos_ix])
         if name in ['chr', 'mc_class', 'strand']:
-            ret_attr = ret_attr.astype('U13')
+            ret_attr = ret_attr.astype('U')
         elif name in ['pos', 'total', 'mc_count', 'methylated']:
             ret_attr = ret_attr.astype(int)
         return(ret_attr)
@@ -207,10 +208,10 @@ class HDF5MethTable(object):
             return(self.h5file['lowfreq'][filter_pos_ix])
 
     def get_permeths(self, filter_pos_ix=None, read_threshold=0):
-	# If read_threshold is given
-	#   if methylated then we have a value
-	#   else the value is 0
-	# Else the notation is -1
+        # If read_threshold is given
+        #   if methylated then we have a value
+        #   else the value is 0
+        # Else the notation is -1
         methylated_cs = np.array(self.__getattr__('methylated', filter_pos_ix), dtype="float")
         mc_count = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
         mc_total = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
@@ -419,6 +420,9 @@ class HDF5MethTable(object):
             chg_gene_meths.to_csv( out_file + ".CHG.bg", sep = "\t", index = False, header = None )
             chh_gene_meths.to_csv( out_file + ".CHH.bg", sep = "\t", index = False, header = None )
         return(all_gene_meths)
+
+    # def calculate_average_deviations_from_fixed(self, bed_file = None):
+
 
 
 def potatoskin_methylation_averages(args):

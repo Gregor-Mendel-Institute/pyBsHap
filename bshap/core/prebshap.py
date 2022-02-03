@@ -1,20 +1,23 @@
 ## Main module for pyBsHap
 
-import pysam
-from pyfaidx import Fasta
+import json
 import logging
+import os.path
+import re
+import string
+import sys
+
+import h5py
 import numpy as np
 import pandas as pd
-import re
-import h5py
-import string
-import os.path, sys
+import pysam
+from Bio import AlignIO
+from Bio.Align import MultipleSeqAlignment
 from Bio.Alphabet import generic_dna
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-from Bio.Align import MultipleSeqAlignment
-from Bio import AlignIO
-import json
+from pyfaidx import Fasta
+
 from . import meth5py
 
 log = logging.getLogger(__name__)

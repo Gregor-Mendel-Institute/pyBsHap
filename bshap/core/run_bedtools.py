@@ -20,6 +20,27 @@ def identify_positions_given_names(in_file, araport11_file):
     req_bed_df = araport11.loc[araport11[3].isin(bed_names),]
     return(req_bed_df)
 
+def intersect_positions_bed(reference_bed, query_bed):
+    assert isinstance(query_bed, pd.DataFrame), "provide a dataframe object" 
+    assert query_bed.shape[1] == 2, "provide a dataframe object with only two columns, else use `get_intersect_bed_ix` function"
+    assert isinstance(reference_bed, pd.DataFrame), "provide a dataframe object"
+    query_ix = np.zeros(0, dtype = "int")
+    # ref_ix = np.zeros(0, dtype = "int")
+    common_chrs = np.intersect1d(reference_bed.iloc[:,0].unique(), query_bed.iloc[:,0].unique() )
+    assert len(common_chrs) > 0, "none of the chromosome IDs are same between reference and query"
+    for e_chr in common_chrs:
+        e_ref_chr_ix = np.arange( np.searchsorted(reference_bed.iloc[:,0], e_chr, 'left'  ), np.searchsorted(reference_bed.iloc[:,0], e_chr, 'right') )
+        e_query_chr_ix = np.arange( np.searchsorted(query_bed.iloc[:,0], e_chr, 'left'  ), np.searchsorted(query_bed.iloc[:,0], e_chr, 'right') )
+
+        e_ref_chr_pos = np.sort( np.concatenate(reference_bed.iloc[e_ref_chr_ix,:].apply(lambda x: np.arange(x.iloc[1], x.iloc[2] + 1), axis = 1 ).values).ravel() )
+        e_query_chr_pos = query_bed.iloc[e_query_chr_ix,1].values
+
+        if len(e_query_chr_pos) >= 1 & len(e_ref_chr_pos) >= 1:
+            e_intersect_pos = np.intersect1d(ar1 = e_ref_chr_pos, ar2 = e_query_chr_pos, return_indices = True)
+            query_ix = np.append(query_ix, e_intersect_pos[2])
+    return(np.sort(query_ix))
+
+
 def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_file=None):
     ## here query_bed is either a file or a pandas dataframe
     ## we can rely on bedops -- very fast and efficient

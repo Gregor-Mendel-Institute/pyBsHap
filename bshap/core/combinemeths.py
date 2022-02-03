@@ -1,5 +1,6 @@
 # Main module for bisulfite analysis
 # Summary statistics
+from doctest import OutputChecker
 import logging
 import h5py as h5
 import numpy as np
@@ -10,6 +11,7 @@ import glob
 import sys
 from . import run_bedtools
 import csv
+import re
 import itertools
 
 log = logging.getLogger(__name__)
@@ -23,6 +25,15 @@ def get_fraction(x, y, y_min = 0):
     return(float(x)/y)
 
 np_get_fraction = np.vectorize(get_fraction, excluded = "y_min")
+
+def getOptimumChunks(num_cols, bits_per_dtype = 4, max_mb_io_speed = 10):
+    ## IO is the basic estimate.
+    ## Maximum chunk size is 4Gb. 
+    ## here I am using chunk size to be approximately 1Gb
+    # Get bits per dtype as np.float32().itemsize
+    perrow_mb = num_cols * bits_per_dtype #* 1024 * 1024
+    num_rows = int((max_mb_io_speed * 1024 * 1024) / perrow_mb)
+    return( (int(num_rows / 1000) + 1) * 1000 )
 
 class CombinedMethsTable(object):
     ## class for a combined meths tables
@@ -60,19 +71,21 @@ class CombinedMethsTable(object):
             mc_permeths_df = mc_permeths_df.merge( t_meths_df, on = ['chr', 'start', 'mc_class'], how = "outer")
         return( mc_permeths_df )
 
-    def derive_most_common_positions_echr(self, chrid, num_lines_with_info = 2):
+    def derive_most_common_positions_echr(self, bed_str, num_lines_with_info = 2):
         # returns common positions for a single chromosome
         #from tempfile import mkdtemp
-        chrid_ind = self.genome.get_chr_ind(chrid)
-        common_positions = np.arange(1, self.genome.golden_chrlen[chrid_ind] + 1, dtype="int")
+        assert type(bed_str) is str, "provide a str object"
+        bed_str = bed_str.split(',')
+        bed_str = [str(bed_str[0]), int(bed_str[1]), int(bed_str[2])]
+        common_positions = np.arange(bed_str[1], bed_str[2] + 1, dtype="int")
         common_positions_scores = np.zeros( len(common_positions), dtype="int16" )
         t_echr_pos_ix = np.repeat(-1, len(common_positions) * self.num_lines).reshape((len(common_positions), self.num_lines))
         for m_ix in range(self.num_lines):
             m = self.meths_list[m_ix]
-            e_chrinds = m.get_chrinds(chrid)
-            e_chr_pos = m.positions[e_chrinds[1][0]:e_chrinds[1][1]]  ## these are the indices here
-            common_positions_scores[e_chr_pos - 1] += 1
-            t_echr_pos_ix[e_chr_pos - 1, m_ix] = np.arange(e_chrinds[1][0], e_chrinds[1][1])
+            e_chr_pos_ix = m.get_filter_inds(bed_str)
+            e_req_pos = m.__getattr__("positions", e_chr_pos_ix, return_np=True)
+            common_positions_scores[e_req_pos - bed_str[1]] += 1
+            t_echr_pos_ix[e_req_pos - bed_str[1], m_ix] = e_chr_pos_ix
         ## Now calculate which positions are needed
         req_pos_ix = np.where( common_positions_scores >= num_lines_with_info )[0]
         common_positions = common_positions[req_pos_ix]
@@ -87,30 +100,31 @@ class CombinedMethsTable(object):
         filter_pos_ixs = np.zeros(shape = (0, self.num_lines), dtype = "int")
         for e_chr in self.genome.chrs:
             log.info("reading in through chromosome %s" % e_chr)
-            e_common_pos = self.derive_most_common_positions_echr(e_chr, num_lines_with_info)
-            common_chrs = np.append(common_chrs, np.repeat( e_chr, e_common_pos[0].shape[0] ) )
-            common_positions = np.append(common_positions, e_common_pos[0] )
-            filter_pos_ixs = np.append(filter_pos_ixs, e_common_pos[1], axis = 0)
+            e_bed_str = str(e_chr) + ",1," + str(self.genome.golden_chrlen[self.genome.get_chr_ind(e_chr)])
+            e_common_pos, e_filter_pos_ix = self.derive_most_common_positions_echr(e_bed_str, num_lines_with_info)
+            common_chrs = np.append(common_chrs, np.repeat( e_chr, e_common_pos.shape[0] ) )
+            common_positions = np.append(common_positions, e_common_pos )
+            filter_pos_ixs = np.append(filter_pos_ixs, e_filter_pos_ix, axis = 0)
         log.info("done! total number of positions: %s" % str(len(common_positions)))
         self.write_methylated_positions(common_chrs, common_positions, filter_pos_ixs, output_file, min_mc_total = min_mc_total)
         return( h5.File(output_file, 'r' ) )
 
-    def write_methylated_positions(self, common_chrs, common_positions, filter_pos_ixs, output_file, min_mc_total = 3, chunk_size=100000):
+    def write_methylated_positions(self, common_chrs, common_positions, filter_pos_ixs, output_file, min_mc_total = 3):
         num_positions = common_positions.shape[0]
-        chunk_size = min( chunk_size, num_positions )
+        chunk_size = max(50000, min( getOptimumChunks(self.num_lines, 4), num_positions ) )
         log.info("writing the data into h5 file")
         outh5file = h5.File(output_file, 'w')
         data_mc_class = np.repeat( 'nan', num_positions )
         outh5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
         outh5file.create_dataset('num_positions', data=num_positions, shape=(1,),dtype='i4')
         outh5file.create_dataset('file_ids', data = np.array(self.file_ids, dtype = "S"))
-        outh5file.create_dataset('chr', data = np.array(common_chrs, dtype = "S"))
-        outh5file.create_dataset('start', dtype = int, data = common_positions)
-        outh5file.create_dataset('end', dtype = int, data = common_positions + 1)
-        outh5file.create_dataset('filter_pos_ix', dtype = int, data = filter_pos_ixs, chunks=((chunk_size, self.num_lines)))
-        mcs_count = outh5file.create_dataset('mc_count', fillvalue = 0, shape = (num_positions, self.num_lines), dtype = int, chunks=((chunk_size, self.num_lines)))
-        mcs_total = outh5file.create_dataset('mc_total', fillvalue = 0, shape = (num_positions, self.num_lines), dtype = int, chunks=((chunk_size, self.num_lines)))
-        mcs_permeths = outh5file.create_dataset('permeths', fillvalue = np.nan, shape = (num_positions, self.num_lines), dtype = float, chunks=((chunk_size, self.num_lines)))
+        outh5file.create_dataset('chr', data = np.array(common_chrs, dtype = "S"), compression = "lzf")
+        outh5file.create_dataset('start', dtype = int, data = common_positions, compression = "lzf")
+        outh5file.create_dataset('end', dtype = int, data = common_positions + 1, compression = "lzf")
+        outh5file.create_dataset('filter_pos_ix', dtype = np.int64, data = filter_pos_ixs, chunks=((chunk_size, self.num_lines)), compression = "lzf")   ### does automatic chunking
+        mcs_count = outh5file.create_dataset('mc_count', fillvalue = 0, shape = (num_positions, self.num_lines), dtype = np.int32, chunks=((chunk_size, self.num_lines)), compression = "lzf")
+        mcs_total = outh5file.create_dataset('mc_total', fillvalue = 0, shape = (num_positions, self.num_lines), dtype = np.int32, chunks=((chunk_size, self.num_lines)), compression = "lzf")
+        mcs_permeths = outh5file.create_dataset('permeths', fillvalue = np.nan, shape = (num_positions, self.num_lines), dtype = np.float32, chunks=((chunk_size, self.num_lines)), compression = "lzf")
         for ef_pos_ix in range(0, num_positions, chunk_size):
             end_point_ix = min(ef_pos_ix+chunk_size, num_positions)
             ef_filter_pos_ixs = filter_pos_ixs[ef_pos_ix:end_point_ix,: ]
@@ -171,3 +185,133 @@ class CombinedMethsTable(object):
             log.info("reading in through chromosome %s" % e_chr)
             self.derive_methylated_identical_pos_ix_echr(e_chr, read_depth=read_depth, pos_in_atleast=pos_in_atleast, max_read_depth=max_read_depth)
         log.info("done!")
+
+
+class EpiMutations(CombinedMethsTable):
+    """
+    Class object for estimating epimutation rate
+
+    """
+    def __init__(self, file_paths, combined_meths_hdf5_file, file_ids = None, genome = "at_tair10"):
+        super().__init__( file_paths, file_ids = file_ids, genome = genome )
+        self.f_mcs = h5.File(combined_meths_hdf5_file, 'r')
+
+
+    def __getattr__(self, name, filter_pos_ix=None, return_np=False):
+        req_names = ['chr', 'start', 'end', 'count', 'mc_count', 'total', 'mc_total', 'permeths', 'mc_class']
+        if name not in req_names:
+            raise AttributeError("%s is not in the keys for HDF5. Only accepted values are %s" % (name, req_names))
+        if name in ['total', 'mc_total']:
+            name = 'mc_total'
+        if name in ['count', 'mc_count']:
+            name = 'mc_count'
+        if filter_pos_ix is None:
+            if return_np: 
+                ret_attr = np.array( self.f_mcs[str(name)] )
+            else:
+                return( self.f_mcs[str(name)] )
+        elif type(filter_pos_ix) is np.ndarray:
+            if len(filter_pos_ix) == 0:
+                ret_attr = np.array(())
+            else:
+                rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
+                ret_attr = np.array(self.f_mcs[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+        else:
+            ret_attr = np.array(self.f_mcs[str(name)][filter_pos_ix])
+        if name in ['chr', 'mc_class']:
+            ret_attr = ret_attr.astype('U')
+        # elif name in ['start', 'total', 'mc_count', 'methylated']:
+            # ret_attr = ret_attr.astype(int)
+        return(ret_attr)
+    
+    def get_req_pos_bed_str(self, bed_str, req_mc_class = "CG[ATCG]", exon_bed_df = None):
+        assert type(bed_str) is str, "provide a str object"
+        bed_str_split = bed_str.split(',')
+        bed_str_split = [str(bed_str_split[0]), int(bed_str_split[1]), int(bed_str_split[2])]
+        ## Filter positions that are in a required bed region
+        chr_ind_start = np.searchsorted( np.array(self.f_mcs['chr']), np.bytes_(bed_str_split[0]) )
+        chr_ind_end = np.searchsorted( np.array(self.f_mcs['chr']), np.bytes_(self.genome.chrs[ self.genome.get_chr_ind( bed_str_split[0] ) + 1 ]) )
+        req_pos_start = np.arange(chr_ind_start, chr_ind_end)[np.searchsorted(self.f_mcs['start'][chr_ind_start:chr_ind_end], bed_str_split[1]  )]
+        req_pos_end = np.arange(chr_ind_start, chr_ind_end)[np.searchsorted(self.f_mcs['start'][chr_ind_start:chr_ind_end], bed_str_split[2]  )]
+        ## Filter positions which are in CG context
+        filter_pos_ix = np.arange( req_pos_start, req_pos_end )[ np.where(pd.Series(np.array(self.f_mcs['mc_class'][req_pos_start:req_pos_end]).astype("U")).str.contains(req_mc_class, regex = True))[0] ]
+        ## Filter CG positions present in gene exons
+        if exon_bed_df is not None:
+            req_mc_bed = pd.DataFrame(
+                {
+                    "chr": bed_str_split[0],
+                    "start": self.__getattr__('start', filter_pos_ix)
+                }
+            )
+            req_exon_inds = run_bedtools.intersect_positions_bed(reference_bed=exon_bed_df, query_bed=req_mc_bed)
+            filter_pos_ix = filter_pos_ix[req_exon_inds]
+
+        return(filter_pos_ix)
+
+    def get_req_pos_ix_genome(self, req_bed_df_dict = None, cache_file = None):
+        mc_data = {}
+        context_search = { 'mcs_mcg_inds': b'CG[ATGC]', 'mcs_mchg_inds': b'C[ATC]G','mcs_mchh_inds': b'C[ATC][ATC]' }
+        for ef_context in context_search.keys():
+            if cache_file is not None:
+                if ef_context in h5.File(cache_file, 'r').keys():
+                    mc_data[ef_context] = pd.read_hdf( cache_file, ef_context )
+                else:
+                    mc_data[ef_context] = pd.Series( np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0] )
+                    mc_data[ef_context].to_hdf(cache_file, key=ef_context, mode='a')
+            else:
+                mc_data[ef_context] = np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0]
+        
+        if req_bed_df_dict is None:
+            return(mc_data)
+
+        query_bed = pd.DataFrame({"chr": np.array(self.f_mcs['chr']).astype('U'), "start": np.array(self.f_mcs['start']) })
+        for ef_dict in req_bed_df_dict.keys():
+            if cache_file is not None:
+                if 'mcs_' + ef_dict + "_inds" in h5.File(cache_file, 'r').keys():
+                    mc_data['mcs_' + ef_dict + "_inds"] = pd.read_hdf( cache_file, 'mcs_' + ef_dict + "_inds" )
+                else:
+                    mc_data['mcs_' + ef_dict + "_inds"] = pd.Series( run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed) )
+                    mc_data['mcs_' + ef_dict + "_inds"].to_hdf(cache_file, key='mcs_' + ef_dict + "_inds", mode='a')
+            else:
+                mc_data['mcs_' + ef_dict + "_inds"] = run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed)
+        return(mc_data)
+
+
+    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, mc_total_min = 3, y_min = 20):
+        assert type(sub_populations) is dict, "provide a dictionary with subpoulation ID and index"
+
+        mc_count = self.__getattr__('mc_count', filter_cg_pos_ix ) 
+        mc_total = self.__getattr__('mc_total', filter_cg_pos_ix ) 
+
+        epi_out = {}
+        epi_out['permeths_subpop'] = pd.DataFrame(index = np.arange( mc_count.shape[0] ))
+
+        epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1'] )
+        for ef_pop in sub_populations.items():
+            epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = y_min)
+            t_pop_mc_count = np.array(mc_count[:,ef_pop[1]], dtype = float).copy()
+            t_pop_mc_total = np.array(mc_total[:,ef_pop[1]], dtype = float).copy()
+            # import ipdb; ipdb.set_trace()
+            t_pop_mc_count[t_pop_mc_total <= mc_total_min] = np.nan
+            t_pop_mc_total[t_pop_mc_total <= mc_total_min] = np.nan
+            t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= 0.2)[0]
+            t_demeth_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] >= 0.8)[0]
+            
+            t_deviation_0 = np_get_fraction(np.nansum( t_pop_mc_count[t_denovo_ix], axis = 0 ), np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 ), y_min = y_min)
+            t_deviation_1 = 1 - np_get_fraction(np.nansum( t_pop_mc_count[t_demeth_ix], axis = 0 ), np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 ), y_min = y_min)
+
+            epi_out['deviations'] = epi_out['deviations'].append(
+                pd.DataFrame( { 
+                    'subpop': ef_pop[0], 
+                    'deviation_0': t_deviation_0, 
+                    'deviation_1': t_deviation_1,
+                    'mc_total_0': np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 ),
+                    'mc_total_1': np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 )
+                },
+                index = ef_pop[1] ) 
+            )
+        return( epi_out )
+
+
+
+
