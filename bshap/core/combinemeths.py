@@ -248,18 +248,19 @@ class EpiMutations(CombinedMethsTable):
 
         return(filter_pos_ix)
 
-    def get_req_pos_ix_genome(self, req_bed_df_dict = None, cache_file = None):
+    def get_req_pos_ix_genome(self, req_bed_df_dict = None, return_contexts = True, cache_file = None):
         mc_data = {}
-        context_search = { 'mcs_mcg_inds': b'CG[ATGC]', 'mcs_mchg_inds': b'C[ATC]G','mcs_mchh_inds': b'C[ATC][ATC]' }
-        for ef_context in context_search.keys():
-            if cache_file is not None:
-                if ef_context in h5.File(cache_file, 'r').keys():
-                    mc_data[ef_context] = pd.read_hdf( cache_file, ef_context )
+        if return_contexts:
+            context_search = { 'mcs_mcg_inds': b'CG[ATGC]', 'mcs_mchg_inds': b'C[ATC]G','mcs_mchh_inds': b'C[ATC][ATC]' }
+            for ef_context in context_search.keys():
+                if cache_file is not None:
+                    if write_to_cache_file(cache_file, ef_context):
+                        mc_data[ef_context] = pd.Series( np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0] )
+                        mc_data[ef_context].to_hdf(cache_file, key=ef_context, mode='a')
+                    else:
+                        mc_data[ef_context] = pd.read_hdf( cache_file, ef_context ) 
                 else:
-                    mc_data[ef_context] = pd.Series( np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0] )
-                    mc_data[ef_context].to_hdf(cache_file, key=ef_context, mode='a')
-            else:
-                mc_data[ef_context] = np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0]
+                    mc_data[ef_context] = np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0]
         
         if req_bed_df_dict is None:
             return(mc_data)
@@ -267,11 +268,11 @@ class EpiMutations(CombinedMethsTable):
         query_bed = pd.DataFrame({"chr": np.array(self.f_mcs['chr']).astype('U'), "start": np.array(self.f_mcs['start']) })
         for ef_dict in req_bed_df_dict.keys():
             if cache_file is not None:
-                if 'mcs_' + ef_dict + "_inds" in h5.File(cache_file, 'r').keys():
-                    mc_data['mcs_' + ef_dict + "_inds"] = pd.read_hdf( cache_file, 'mcs_' + ef_dict + "_inds" )
-                else:
+                if write_to_cache_file(cache_file, 'mcs_' + ef_dict + "_inds"):
                     mc_data['mcs_' + ef_dict + "_inds"] = pd.Series( run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed) )
                     mc_data['mcs_' + ef_dict + "_inds"].to_hdf(cache_file, key='mcs_' + ef_dict + "_inds", mode='a')
+                else:
+                    mc_data['mcs_' + ef_dict + "_inds"] = pd.read_hdf( cache_file, 'mcs_' + ef_dict + "_inds" )
             else:
                 mc_data['mcs_' + ef_dict + "_inds"] = run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed)
         return(mc_data)
@@ -312,6 +313,19 @@ class EpiMutations(CombinedMethsTable):
             )
         return( epi_out )
 
+
+def write_to_cache_file(file_name, data_key):
+    if file_name is not None:
+        if op.exists(str(file_name)):
+            if data_key in h5.File(file_name, 'r').keys():
+                write_to_cache = False
+            else:
+                write_to_cache = True
+        else:
+            write_to_cache = True
+    else:
+        write_to_cache = False
+    return(write_to_cache)
 
 
 

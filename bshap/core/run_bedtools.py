@@ -29,15 +29,20 @@ def intersect_positions_bed(reference_bed, query_bed):
     common_chrs = np.intersect1d(reference_bed.iloc[:,0].unique(), query_bed.iloc[:,0].unique() )
     assert len(common_chrs) > 0, "none of the chromosome IDs are same between reference and query"
     for e_chr in common_chrs:
-        e_ref_chr_ix = np.arange( np.searchsorted(reference_bed.iloc[:,0], e_chr, 'left'  ), np.searchsorted(reference_bed.iloc[:,0], e_chr, 'right') )
-        e_query_chr_ix = np.arange( np.searchsorted(query_bed.iloc[:,0], e_chr, 'left'  ), np.searchsorted(query_bed.iloc[:,0], e_chr, 'right') )
+        e_ref_chr_ix = np.arange( 
+            np.searchsorted(reference_bed.iloc[:,0], e_chr, 'left'  ), 
+            np.searchsorted(reference_bed.iloc[:,0], e_chr, 'right')
+        )
+        e_query_chr_ix = np.arange( 
+            np.searchsorted(query_bed.iloc[:,0], e_chr, 'left'  ), 
+            np.searchsorted(query_bed.iloc[:,0], e_chr, 'right')
+        )
 
         e_ref_chr_pos = np.sort( np.concatenate(reference_bed.iloc[e_ref_chr_ix,:].apply(lambda x: np.arange(x.iloc[1], x.iloc[2] + 1), axis = 1 ).values).ravel() )
         e_query_chr_pos = query_bed.iloc[e_query_chr_ix,1].values
 
-        if len(e_query_chr_pos) >= 1 & len(e_ref_chr_pos) >= 1:
-            e_intersect_pos = np.intersect1d(ar1 = e_ref_chr_pos, ar2 = e_query_chr_pos, return_indices = True)
-            query_ix = np.append(query_ix, e_intersect_pos[2])
+        e_intersect_pos = np.intersect1d(ar1 = e_ref_chr_pos, ar2 = e_query_chr_pos, return_indices = True)
+        query_ix = np.append(query_ix, e_query_chr_ix[0] + e_intersect_pos[2])
     return(np.sort(query_ix))
 
 
