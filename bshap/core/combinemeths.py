@@ -111,7 +111,7 @@ class CombinedMethsTable(object):
 
     def write_methylated_positions(self, common_chrs, common_positions, filter_pos_ixs, output_file, min_mc_total = 3):
         num_positions = common_positions.shape[0]
-        chunk_size = max(50000, min( getOptimumChunks(self.num_lines, 4), num_positions ) )
+        chunk_size = max(100000, min( getOptimumChunks(self.num_lines, 4), num_positions ) )
         log.info("writing the data into h5 file")
         outh5file = h5.File(output_file, 'w')
         data_mc_class = np.repeat( 'nan', num_positions )
@@ -229,8 +229,8 @@ class EpiMutations(CombinedMethsTable):
         bed_str_split = bed_str.split(',')
         bed_str_split = [str(bed_str_split[0]), int(bed_str_split[1]), int(bed_str_split[2])]
         ## Filter positions that are in a required bed region
-        chr_ind_start = np.searchsorted( np.array(self.f_mcs['chr']), np.bytes_(bed_str_split[0]) )
-        chr_ind_end = np.searchsorted( np.array(self.f_mcs['chr']), np.bytes_(self.genome.chrs[ self.genome.get_chr_ind( bed_str_split[0] ) + 1 ]) )
+        chr_ind_start = np.searchsorted( np.array(self.f_mcs['chr']), np.bytes_(bed_str_split[0]), "left" )
+        chr_ind_end = np.searchsorted( np.array(self.f_mcs['chr']), np.bytes_(bed_str_split[0]), "right" )
         req_pos_start = np.arange(chr_ind_start, chr_ind_end)[np.searchsorted(self.f_mcs['start'][chr_ind_start:chr_ind_end], bed_str_split[1]  )]
         req_pos_end = np.arange(chr_ind_start, chr_ind_end)[np.searchsorted(self.f_mcs['start'][chr_ind_start:chr_ind_end], bed_str_split[2]  )]
         ## Filter positions which are in CG context
@@ -278,38 +278,57 @@ class EpiMutations(CombinedMethsTable):
         return(mc_data)
 
 
-    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, mc_total_min = 3, y_min = 20):
+    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, mc_total_min = 3, y_min = 20, return_site_ix = False):
         assert type(sub_populations) is dict, "provide a dictionary with subpoulation ID and index"
 
         mc_count = self.__getattr__('mc_count', filter_cg_pos_ix ) 
         mc_total = self.__getattr__('mc_total', filter_cg_pos_ix ) 
+        mc_permeth = self.__getattr__('permeths', filter_cg_pos_ix ) 
 
         epi_out = {}
-        epi_out['permeths_subpop'] = pd.DataFrame(index = np.arange( mc_count.shape[0] ))
+        epi_out['permeths_subpop'] = pd.DataFrame(index = filter_cg_pos_ix )
 
-        epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1'] )
+        epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'cell_deviation_0', 'cell_deviation_1', 'read_total_0', 'read_total_1'] )
         for ef_pop in sub_populations.items():
             epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = y_min)
-            t_pop_mc_count = np.array(mc_count[:,ef_pop[1]], dtype = float).copy()
-            t_pop_mc_total = np.array(mc_total[:,ef_pop[1]], dtype = float).copy()
-            # import ipdb; ipdb.set_trace()
-            t_pop_mc_count[t_pop_mc_total <= mc_total_min] = np.nan
-            t_pop_mc_total[t_pop_mc_total <= mc_total_min] = np.nan
             t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= 0.2)[0]
             t_demeth_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] >= 0.8)[0]
-            
-            t_deviation_0 = np_get_fraction(np.nansum( t_pop_mc_count[t_denovo_ix], axis = 0 ), np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 ), y_min = y_min)
-            t_deviation_1 = 1 - np_get_fraction(np.nansum( t_pop_mc_count[t_demeth_ix], axis = 0 ), np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 ), y_min = y_min)
 
+            ## Calculate number of cytosines that increase its methylation
+            t_mc_permeths = np.array(mc_permeth[:,ef_pop[1]]).copy()
+            # t_mc_permeths[np.greater_equal(t_mc_permeths, 0.5, where = ~np.isnan(t_mc_permeths))] = 1
+            # t_mc_permeths[np.less(t_mc_permeths, 0.5, where = ~np.isnan(t_mc_permeths))] = 0
+            with np.errstate(invalid='ignore'):
+                t_mc_permeths[t_mc_permeths >= 0.5] = 1
+                t_mc_permeths[t_mc_permeths < 0.5] = 0
+            t_mc_total_0 = (~np.isnan(t_mc_permeths[t_denovo_ix])).sum(0)
+            t_mc_total_1 = (~np.isnan(t_mc_permeths[t_demeth_ix])).sum(0)
+            t_deviation_0 = np_get_fraction(np.nansum(t_mc_permeths[t_denovo_ix], axis = 0), t_mc_total_0, y_min = y_min)
+            t_deviation_1 = 1 - np_get_fraction(np.nansum(t_mc_permeths[t_demeth_ix], axis = 0), t_mc_total_1, y_min = y_min)
+
+            ### Do weighted average for the positions
+            t_pop_mc_count = np.array(mc_count[:,ef_pop[1]], dtype = float).copy()
+            t_pop_mc_total = np.array(mc_total[:,ef_pop[1]], dtype = float).copy()
+            t_pop_mc_count[t_pop_mc_total <= mc_total_min] = np.nan
+            t_pop_mc_total[t_pop_mc_total <= mc_total_min] = np.nan
+            t_mc_read_total_0 = np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 )
+            t_mc_read_total_1 = np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 )
+            t_read_deviation_0 = np_get_fraction(np.nansum( t_pop_mc_count[t_denovo_ix], axis = 0 ), t_mc_read_total_0, y_min = y_min)
+            t_read_deviation_1 = 1 - np_get_fraction(np.nansum( t_pop_mc_count[t_demeth_ix], axis = 0 ), t_mc_read_total_1, y_min = y_min)
+            
             epi_out['deviations'] = epi_out['deviations'].append(
                 pd.DataFrame( { 
                     'subpop': ef_pop[0], 
                     'deviation_0': t_deviation_0, 
                     'deviation_1': t_deviation_1,
-                    'mc_total_0': np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 ),
-                    'mc_total_1': np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 )
+                    'mc_total_0': t_mc_total_0,
+                    'mc_total_1': t_mc_total_1,
+                    'cell_deviation_0': t_read_deviation_0, 
+                    'cell_deviation_1': t_read_deviation_1,
+                    'read_total_0': t_mc_total_0,
+                    'read_total_1': t_mc_total_1
                 },
-                index = ef_pop[1] ) 
+                index = self.file_ids[ef_pop[1]] )
             )
         return( epi_out )
 

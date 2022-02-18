@@ -26,26 +26,20 @@ class writeHDF5MethTable(object):
     Main class function to write hdf5 files from allc, bed files
     """
 
-    def __init__(self, allc_file, ref_fasta_file, output_file = None):
+    def __init__(self, ref_fasta_file, allc_file = None, output_file = None):
         """
         initilize class function
         """
         self.fasta =  genome.GenomeClass(ref_fasta_file)
-        self.allc_file = allc_file
+        if allc_file is not None:
+            self.load_allc_file(allc_file)
         if output_file is not None:
-            self.load_allc_file()
             self.write_h5_file( output_file )
 
-    def _read_allc_file(self, header = None):
-        log.info("reading the allc file")
-        bsbed = pd.read_csv(self.allc_file, sep = "\t", header = None, dtype = {0: "str", 1: np.int64})
-        if len(bsbed.columns) == 7:
-            bsbed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
-        log.info("done!")
-        return(bsbed)
-        
-    def load_allc_file(self):
-        allc_bed = self._read_allc_file()
+    def load_allc_file(self, allc_file):
+        log.info("reading the allc file!")
+        allc_bed = pd.read_csv(allc_file, sep = "\t", header = None, dtype = {0: "str", 1: np.int64})
+        allc_bed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
         allc_bed_sorted = pd.DataFrame(columns = allc_bed.columns)
         chrpositions = np.zeros(1, dtype="int")
         log.info("sorting the bed file!")
@@ -57,23 +51,33 @@ class writeHDF5MethTable(object):
         self.allc_bed = allc_bed_sorted
         self.chrpositions = chrpositions
 
+    def load_bismark_coverage(self, bismark_cov_file, min_total = 1, umeth = None):
+        bsbed = pd.read_csv(bismark_cov_file, sep = "\t", header = None, dtype = {0: "str", 1: np.int64})
+        bsbed.columns = ['chr', 'pos', 'strand', 'mc_count', 'c_count', 'context', 'mc_class']
+        bsbed['total'] = bsbed['mc_count'] + bsbed['c_count']
+        self.allc_bed = pd.DataFrame(columns = bsbed.columns)
+        self.chrpositions = np.zeros(1, dtype="int")
+        for ec in self.fasta.chrs:
+            t_echr = bsbed.loc[bsbed['chr'] == ec].sort_values(by='pos', ascending=True)
+            t_echr = t_echr[t_echr['total'] >= min_total]
+            self.allc_bed = self.allc_bed.append(t_echr, ignore_index=True)
+            self.chrpositions = np.append( self.chrpositions, self.chrpositions[-1] + t_echr.shape[0] )
+        if umeth is not None:
+            conv_rates = bsbed.loc[bsbed['chr'] == umeth, ["mc_count", 'total']].sum(0)
+            return( (conv_rates['mc_count'] / conv_rates['total']) )
+        return(None) 
+
 
     def write_h5_file(self, output_file):
         chunk_size = min(100000, self.allc_bed.shape[0])
         h5file = h5.File(output_file, 'w')
         h5file.create_dataset('chunk_size', data=chunk_size, shape=(1,),dtype='i8')
         h5file.create_dataset('chrpositions', data=self.chrpositions, shape=(len(self.chrpositions),),dtype='int')
-        allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total', 'methylated']
-        allc_dtypes = ['S16', 'int', 'S4', 'S8', 'int', 'int', 'int8']
+        allc_columns = ['chr', 'pos', 'strand', 'mc_class', 'mc_count', 'total']
+        allc_dtypes = ['S16', 'int', 'S4', 'S8', 'int', 'int']
         ## Going through all the columns
         for cols, coltype in zip(allc_columns, allc_dtypes):
             h5file.create_dataset(cols, compression="gzip", data=np.array(self.allc_bed[cols],dtype=coltype), shape=(self.allc_bed.shape[0],), chunks = ((chunk_size,)))
-        if self.allc_bed.shape[1] > 7:
-            for i in range(7,self.allc_bed.shape[1]):
-                try:
-                    h5file.create_dataset(self.allc_bed.columns[i], compression="gzip", data=np.array(self.allc_bed[self.allc_bed.columns[i]]), shape=(self.allc_bed.shape[0],),chunks = ((chunk_size,)))
-                except TypeError:
-                    h5file.create_dataset(self.allc_bed.columns[i], compression="gzip", data=np.array(self.allc_bed[self.allc_bed.columns[i]],dtype="S8"), shape=(self.allc_bed.shape[0],),chunks = ((chunk_size,)))
         h5file.close()
 
 # def read_allc_files_chrwise(allc_id, allc_path):
@@ -99,7 +103,7 @@ def load_hdf5_methylation_file(hdf5_file, ref_fasta="at_tair10", bin_bed=None):
 # Try to make it as a class, learned from PyGWAS
 class HDF5MethTable(object):
 
-    def __init__(self,hdf5_file, ref_fasta = "at_tair10", bin_bed=None):
+    def __init__(self, hdf5_file, ref_fasta = "at_tair10", bin_bed=None):
         self.h5file = h5.File(hdf5_file,'r')
         self.filter_pos_ix = self.get_filter_inds(bin_bed)
         self.chrpositions = np.array(self.h5file['chrpositions'])
@@ -110,12 +114,9 @@ class HDF5MethTable(object):
             self.h5file.close()
 
     def get_chrinds(self, chrid):
-        chrid_mod = str(chrid).replace("Chr", "").replace("chr", "")
-        real_chrs = np.array( [ ec.replace("Chr", "").replace("chr", "") for ec in self.__getattr__('chr', self.chrpositions[0:-1]) ] )
-        req_chr_ind = np.where(real_chrs == chrid_mod)[0]
-        if len( req_chr_ind ) == 0:
+        req_chr_ind = self.genome.get_chr_ind(chrid)
+        if req_chr_ind is None:
             return( (None, None) )
-        req_chr_ind = req_chr_ind[0]
         chr_inds = [self.chrpositions[req_chr_ind], self.chrpositions[req_chr_ind + 1]]
         return((req_chr_ind, chr_inds))
 
@@ -212,10 +213,11 @@ class HDF5MethTable(object):
         #   if methylated then we have a value
         #   else the value is 0
         # Else the notation is -1
-        methylated_cs = np.array(self.__getattr__('methylated', filter_pos_ix), dtype="float")
+        # methylated_cs = np.array(self.__getattr__('methylated', filter_pos_ix), dtype="float")
         mc_count = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
         mc_total = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
-        calculated_permeths = np.divide(np.multiply(methylated_cs, mc_count), mc_total)
+        # calculated_permeths = np.divide(np.multiply(methylated_cs, mc_count), mc_total)
+        calculated_permeths = np.divide(mc_count, mc_total)
         if read_threshold == 0:
             return(calculated_permeths)
         else:
@@ -268,8 +270,8 @@ class HDF5MethTable(object):
         if np.sum(mc_total) == 0:
             return(np.nan)
         if category == 1:   # weighted mean
-            methylated_cs = np.where(self.__getattr__('methylated', filter_pos_ix, return_np=True) == 1)[0]
-            return(np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total)))
+            # methylated_cs = np.where(self.__getattr__('methylated', filter_pos_ix, return_np=True) == 1)[0]
+            return(np.divide(float(np.sum(mc_count)), np.sum(mc_total)))
         elif category == 2: # fraction of methylated positions
             methylated = self.__getattr__('methylated', filter_pos_ix, return_np=True)
             meths_len = np.sum(methylated)
