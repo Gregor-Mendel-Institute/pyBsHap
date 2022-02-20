@@ -36,7 +36,7 @@ class writeHDF5MethTable(object):
         if output_file is not None:
             self.write_h5_file( output_file )
 
-    def load_allc_file(self, allc_file):
+    def load_allc_file(self, allc_file, umeth = None):
         log.info("reading the allc file!")
         allc_bed = pd.read_csv(allc_file, sep = "\t", header = None, dtype = {0: "str", 1: np.int64})
         allc_bed.columns = np.array(['chr','pos','strand','mc_class','mc_count','total','methylated'])
@@ -50,8 +50,12 @@ class writeHDF5MethTable(object):
         log.info("done!")
         self.allc_bed = allc_bed_sorted
         self.chrpositions = chrpositions
+        if umeth is not None:
+            conv_rates = allc_bed.loc[allc_bed['chr'] == umeth, ["mc_count", 'total']].sum(0)
+            return( (conv_rates['mc_count'] / conv_rates['total']) )
+        return(None)
 
-    def load_bismark_coverage(self, bismark_cov_file, min_total = 1, umeth = None):
+    def load_bismark_coverage(self, bismark_cov_file, umeth = None, min_total = 1):
         bsbed = pd.read_csv(bismark_cov_file, sep = "\t", header = None, dtype = {0: "str", 1: np.int64})
         bsbed.columns = ['chr', 'pos', 'strand', 'mc_count', 'c_count', 'context', 'mc_class']
         bsbed['total'] = bsbed['mc_count'] + bsbed['c_count']
@@ -254,7 +258,7 @@ class HDF5MethTable(object):
             if skipped:
                 yield((bin_bed, result))
 
-    def MethylationSummaryStats(self, filter_pos_ix, category = 1, req_context = None):
+    def MethylationSummaryStats(self, filter_pos_ix, category = 1, req_context = None, min_depth = 3):
         # meths is already filtered for bin_bed positions
         if filter_pos_ix is None:
             return(np.nan)
@@ -270,8 +274,9 @@ class HDF5MethTable(object):
         if np.sum(mc_total) == 0:
             return(np.nan)
         if category == 1:   # weighted mean
+            methylated_cs = np.where(mc_total >= min_depth)[0]
             # methylated_cs = np.where(self.__getattr__('methylated', filter_pos_ix, return_np=True) == 1)[0]
-            return(np.divide(float(np.sum(mc_count)), np.sum(mc_total)))
+            return(np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total[methylated_cs])))
         elif category == 2: # fraction of methylated positions
             methylated = self.__getattr__('methylated', filter_pos_ix, return_np=True)
             meths_len = np.sum(methylated)

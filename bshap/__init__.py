@@ -70,8 +70,10 @@ def get_options(program_license,program_version_message):
     t1001gparser.set_defaults(func=generate_hdf5)
 
     meth_h5_p = subparsers.add_parser('allc_to_hdf5', help="Generate h5 file from allc")
-    meth_h5_p.add_argument("-i", "--input_allc", dest="in_allc", help="Input allc file", required=True)
+    meth_h5_p.add_argument("-i", "--input_file", dest="input_file", help="Input file", required=True)
+    meth_h5_p.add_argument("-t", "--file_type", dest="file_type", help='Input file type, currently accepted are "bismark" and "methylpy"', required=True)
     meth_h5_p.add_argument("-f", dest="ref_fasta", type=str, help="Path for reference fasta file")
+    meth_h5_p.add_argument("--umeth_control", dest="umeth", help='Unmethylated control to calculate conversion rate', default = None)
     meth_h5_p.add_argument("-o", "--output", dest="output_file", help="output file.")
     meth_h5_p.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     meth_h5_p.set_defaults(func=write_meth_h5file)
@@ -175,7 +177,16 @@ def mergeallc(args):
     meth5py.write_combined_h5_permeths(meths_list, args['outFile'], read_threshold=args['read_threshold'])
 
 def write_meth_h5file(args):
-    meth5py.writeHDF5MethTable( args['in_allc'], args['ref_fasta'], args['output_file'])
+    m = meth5py.writeHDF5MethTable( ref_fasta_file = args['ref_fasta'] )
+    if args['file_type'] == "allc":
+        conv_rate = m.load_allc_file( args['input_file'], umeth = args['umeth'] )
+    elif args['file_type'] == 'bismark':
+        conv_rate = m.load_bismark_coverage( args['input_file'], umeth = args['umeth'] )
+    m.write_h5_file( args['output_file'] + ".hdf5" )
+    if conv_rate is not None:
+        with open(args['output_file'] + '.conv_rate.txt', "w") as out_conv_rate:
+            out_conv_rate.write("%s\t%s\n" % (args['input_file'], conv_rate))
+
 
 def generate_hdf5(args):
     writeh5 = the1001g.WriteHDF51001Table(args['file_paths'], args['output_file'])
