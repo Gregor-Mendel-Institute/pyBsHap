@@ -251,7 +251,7 @@ class EpiMutations(CombinedMethsTable):
                     "start": self.__getattr__('start', filter_pos_ix)
                 }
             )
-            req_exon_inds = run_bedtools.intersect_positions_bed(reference_bed=exon_bed_df, query_bed=req_mc_bed)[1]
+            req_exon_inds = run_bedtools.intersect_positions_bed(reference_bed=exon_bed_df, query_bed=req_mc_bed)
             filter_pos_ix = filter_pos_ix[req_exon_inds]
 
         return(filter_pos_ix)
@@ -277,12 +277,12 @@ class EpiMutations(CombinedMethsTable):
         for ef_dict in req_bed_df_dict.keys():
             if cache_file is not None:
                 if write_to_cache_file(cache_file, 'mcs_' + ef_dict + "_inds"):
-                    mc_data['mcs_' + ef_dict + "_inds"] = pd.Series( run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed) )[1]
+                    mc_data['mcs_' + ef_dict + "_inds"] = pd.Series( run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed) )
                     mc_data['mcs_' + ef_dict + "_inds"].to_hdf(cache_file, key='mcs_' + ef_dict + "_inds", mode='a')
                 else:
                     mc_data['mcs_' + ef_dict + "_inds"] = pd.read_hdf( cache_file, 'mcs_' + ef_dict + "_inds" )
             else:
-                mc_data['mcs_' + ef_dict + "_inds"] = run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed)[1]
+                mc_data['mcs_' + ef_dict + "_inds"] = run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed)
         return(mc_data)
 
 
