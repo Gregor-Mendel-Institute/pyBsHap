@@ -324,15 +324,20 @@ class HDF5MethTable(object):
         outmeths_chh_avg.close()
         log.info("done!")
 
-    def generate_meth_average_required_bed(self, required_bed, out_file = None, category=1):
+    def generate_meth_average_required_bed(self, required_bed, out_file = None, sort_bed = True, index_bed = True, category=1):
         if type(required_bed) is str:
             if op.isfile(required_bed):
                 req_regions = pd.read_csv(required_bed, sep = "\t", header=None)
+                if index_bed:
+                    req_regions = req_regions.set_index(3)
             else:
                 ### required_bed = "Chr1,1,1000"
                 req_regions = pd.DataFrame(required_bed.split(",")).T
         elif type(required_bed) is pd.DataFrame:
             req_regions = required_bed
+        ## Sort the given bed file
+        if sort_bed:
+            req_regions = run_bedtools.sort_bed_df(req_regions)
         assert len(req_regions.columns) >= 3, "bed file should have minimum of 3 columns. eg., Chr, Start, End"
         if out_file is not None:
             outmeths_cg_avg = open(out_file + ".CG.bg", 'w')
@@ -345,16 +350,16 @@ class HDF5MethTable(object):
             calc_for_each = False
         for er in req_regions.iterrows():
             if calc_for_each:
-                t_filter_pos_ix = self.get_filter_inds( [er[1][0], int(er[1][1]), int(er[1][2]) ] )
+                t_filter_pos_ix = self.get_filter_inds( [er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]) ] )
             else:
                 t_filter_pos_ix = mat_positions.loc[mat_positions['query_ix'] == np.where(req_regions.index.values == er[0])[0][0],'ref_ix'].values
             count = 0
             t_count = self._TotalCounts_All_Contexts( t_filter_pos_ix )
             req_meth_avg = self._AveMethylation_All_Contexts(t_filter_pos_ix, category)
             if out_file is not None:
-                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[0], len(t_count[0])))
-                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[1], len(t_count[1])))
-                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1][0], int(er[1][1]), int(er[1][2]), req_meth_avg[2], len(t_count[2])))
+                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]), req_meth_avg[0], len(t_count[0])))
+                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]), req_meth_avg[1], len(t_count[1])))
+                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]), req_meth_avg[2], len(t_count[2])))
             output_meths.loc[er[0], 'cg'] = req_meth_avg[0]
             output_meths.loc[er[0], 'chg'] = req_meth_avg[1]
             output_meths.loc[er[0], 'chh'] = req_meth_avg[2]
@@ -366,6 +371,8 @@ class HDF5MethTable(object):
             outmeths_chg_avg.close()
             outmeths_chh_avg.close()
         log.info("done!")
+        if index_bed:
+            output_meths.to_csv( out_file + ".csv" )
         return(output_meths)
 
     def calculate_gbm_exon_only(self, input_gff_db, gene_id, out_file = None):
