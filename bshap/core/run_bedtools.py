@@ -53,11 +53,14 @@ def intersect_positions_bed(reference_bed, query_bed):
         query_ix = np.append(query_ix, e_query_chr_ix[0] + e_intersect_pos[2])
     return(np.sort(query_ix))
 
-def intersect_positions_bed_minimal(reference_bed, query_bed, genome_class):
-    assert isinstance(query_bed, pd.DataFrame), "provide a dataframe object" 
-    assert query_bed.shape[1] == 2, "provide a dataframe object with only two columns, else use `get_intersect_bed_ix` function"
-    assert isinstance(reference_bed, pd.DataFrame), "provide a dataframe object"
+def intersect_positions_bed_minimal(reference_bed_df, query_bed_df, genome_class):
+    assert isinstance(query_bed_df, pd.DataFrame), "provide a dataframe object" 
+    assert query_bed_df.shape[1] == 2, "provide a dataframe object with only two columns, else use `get_intersect_bed_ix` function"
+    assert isinstance(reference_bed_df, pd.DataFrame), "provide a dataframe object"
     assert type(genome_class) is genome.GenomeClass, "Provide a genome class from pygenome repository"
+
+    reference_bed = reference_bed_df.reset_index(drop=True).copy()
+    query_bed = query_bed_df.reset_index(drop=True).copy()
 
     query_genomewide_ix = genome_class.get_genomewide_inds( query_bed )
     ref_genomewide_start_ix = genome_class.get_genomewide_inds( reference_bed.iloc[:,[0,1]] )

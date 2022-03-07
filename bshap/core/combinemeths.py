@@ -19,12 +19,11 @@ log = logging.getLogger(__name__)
 from . import meth5py
 from pygenome import genome as g
 
-def get_fraction(x, y, y_min = 0):
-    if y <= y_min:
-        return(np.nan)
-    return(float(x)/y)
-
-np_get_fraction = np.vectorize(get_fraction, excluded = "y_min")
+def np_get_fraction(x, y, y_min = 0):
+    with np.errstate(divide='ignore', invalid='ignore'):
+        p = np.divide( x, y )
+        p[np.where(y <= y_min)] = np.nan
+    return(p)
 
 def getOptimumChunks(num_cols, bits_per_dtype = 4, max_mb_io_speed = 10):
     ## IO is the basic estimate.
@@ -45,7 +44,7 @@ class CombinedMethsTable(object):
         if file_ids is not None:
             self.file_ids = file_ids
         else:
-            self.file_ids = file_paths
+            self.file_ids = np.array([op.basename( ef ) for ef in file_paths])
 
     def load_meths_files(self, file_paths):
         log.info("reading input files")
@@ -111,7 +110,8 @@ class CombinedMethsTable(object):
 
     def write_methylated_positions(self, common_chrs, common_positions, filter_pos_ixs, output_file, min_mc_total = 3):
         num_positions = common_positions.shape[0]
-        chunk_size = max(100000, min( getOptimumChunks(self.num_lines, 4), num_positions ) )
+        chunk_size = min(100000, num_positions )
+        # chunk_size = max(100000, min( getOptimumChunks(self.num_lines, 4), num_positions ) )
         log.info("writing the data into h5 file")
         outh5file = h5.File(output_file, 'w')
         data_mc_class = np.repeat( 'nan', num_positions )
@@ -224,12 +224,16 @@ class EpiMutations(CombinedMethsTable):
             # ret_attr = ret_attr.astype(int)
         return(ret_attr)
 
-    def get_bed_pos_ix(self, filter_pos_ix):
+    def get_bed_pos_ix(self, filter_pos_ix, updown = None):
+        
         bed_df = pd.DataFrame({
             "chr": self.__getattr__("chr", filter_pos_ix ),
-            "start": self.__getattr__("chr", filter_pos_ix ),
-            "end": self.__getattr__("chr", filter_pos_ix )
+            "start": self.__getattr__("start", filter_pos_ix ),
+            "end": self.__getattr__("end", filter_pos_ix )
         }, index = filter_pos_ix)
+        if updown is not None:
+            bed_df['start'] = bed_df['start'].values - updown
+            bed_df['end'] = bed_df['end'].values + updown
         return(bed_df)
     
     def get_req_pos_bed_str(self, bed_str, req_mc_class = "CG[ATCG]", exon_bed_df = None):
@@ -296,7 +300,7 @@ class EpiMutations(CombinedMethsTable):
         epi_out = {}
         epi_out['permeths_subpop'] = pd.DataFrame(index = filter_cg_pos_ix )
 
-        epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'cell_deviation_0', 'cell_deviation_1', 'read_total_0', 'read_total_1'] )
+        epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'site_deviation_0', 'site_deviation_1', 'read_total_0', 'read_total_1'] )
         for ef_pop in sub_populations.items():
             epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = y_min)
             t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= 0.2)[0]
@@ -327,12 +331,12 @@ class EpiMutations(CombinedMethsTable):
             epi_out['deviations'] = epi_out['deviations'].append(
                 pd.DataFrame( { 
                     'subpop': ef_pop[0], 
-                    'deviation_0': t_deviation_0, 
-                    'deviation_1': t_deviation_1,
+                    'deviation_0': t_read_deviation_0, 
+                    'deviation_1': t_read_deviation_1,
                     'mc_total_0': t_mc_total_0,
                     'mc_total_1': t_mc_total_1,
-                    'cell_deviation_0': t_read_deviation_0, 
-                    'cell_deviation_1': t_read_deviation_1,
+                    'site_deviation_0': t_deviation_0, 
+                    'site_deviation_1': t_deviation_1,
                     'read_total_0': t_mc_total_0,
                     'read_total_1': t_mc_total_1
                 },
