@@ -195,7 +195,23 @@ class EpiMutations(CombinedMethsTable):
     def __init__(self, file_paths, combined_meths_hdf5_file, file_ids = None, genome = "at_tair10"):
         super().__init__( file_paths, file_ids = file_ids, genome = genome )
         self.f_mcs = h5.File(combined_meths_hdf5_file, 'r')
+        self.file_ids = np.array(self.f_mcs['file_ids']).astype("U")
 
+    def search_file_ids(self, search_keys, **kwargs):
+        """
+        Function to give index of the file ID which contains a specific string
+        input:
+            provide a pandas series with all the search string. index corresponds to the key
+        """
+        search_indices = {}
+        assert type(search_keys) is pd.Series, "provide a series with search strings and index as key"
+        for ef_dict in search_keys.items():
+            ef_acc_ix = np.where(pd.Series(self.file_ids).str.contains( ef_dict[1], kwargs))[0]
+            if ef_dict[0] in search_indices.keys():
+                search_indices[ef_dict[0]] = np.sort(np.append(search_indices[ef_dict[0]], ef_acc_ix))
+            else:
+                search_indices[ef_dict[0]] = ef_acc_ix
+        return(search_indices)
 
     def __getattr__(self, name, filter_pos_ix=None, return_np=False):
         req_names = ['chr', 'start', 'end', 'count', 'mc_count', 'total', 'mc_total', 'permeths', 'mc_class']
