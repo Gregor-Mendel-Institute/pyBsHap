@@ -370,9 +370,9 @@ class HDF5MethTable(object):
             outmeths_cg_avg.close()
             outmeths_chg_avg.close()
             outmeths_chh_avg.close()
+            if index_bed:
+                output_meths.to_csv( out_file + ".csv" )
         log.info("done!")
-        if index_bed:
-            output_meths.to_csv( out_file + ".csv" )
         return(output_meths)
 
     def calculate_gbm_exon_only(self, input_gff_db, gene_id, out_file = None):
