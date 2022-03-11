@@ -324,12 +324,14 @@ class HDF5MethTable(object):
         outmeths_chh_avg.close()
         log.info("done!")
 
-    def generate_meth_average_required_bed(self, required_bed, out_file = None, sort_bed = True, index_bed = True, category=1):
+    def generate_meth_average_required_bed(self, required_bed, out_file = None, sort_bed = True, category=1):
+        indexed_bed = False
         if type(required_bed) is str:
             if op.isfile(required_bed):
                 req_regions = pd.read_csv(required_bed, sep = "\t", header=None)
-                if index_bed:
+                if len(req_regions.columns) >= 4:
                     req_regions = req_regions.set_index(3)
+                    indexed_bed = True
             else:
                 ### required_bed = "Chr1,1,1000"
                 req_regions = pd.DataFrame(required_bed.split(",")).T
@@ -370,7 +372,7 @@ class HDF5MethTable(object):
             outmeths_cg_avg.close()
             outmeths_chg_avg.close()
             outmeths_chh_avg.close()
-            if index_bed:
+            if indexed_bed:
                 output_meths.to_csv( out_file + ".csv" )
         log.info("done!")
         return(output_meths)
