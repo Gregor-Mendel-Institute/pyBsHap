@@ -86,6 +86,9 @@ def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_fi
         if os.path.isfile(query_bed):
             queryBed = pybed.BedTool(query_bed)
     elif isinstance(query_bed, pd.DataFrame):
+        # query_bed.iloc[:,0] = query_bed.iloc[:,0].astype()
+        query_bed.iloc[:,1] = query_bed.iloc[:,1].astype(int)
+        query_bed.iloc[:,2] = query_bed.iloc[:,2].astype(int)
         queryBed = pybed.BedTool.from_dataframe(query_bed.iloc[:,[0,1,2]])
     elif isinstance(query_bed, pybed.bedtool.BedTool):
         queryBed = query_bed
@@ -98,6 +101,8 @@ def get_intersect_bed_ix(reference_bed, query_bed, just_names=True, araport11_fi
         reference_bed_df = identify_positions_given_names(reference_bed, araport11_file)
         refBed = pybed.BedTool.from_dataframe(reference_bed_df.iloc[:,[0,1,2]])
     elif isinstance(reference_bed, pd.DataFrame):
+        reference_bed.iloc[:,1] = reference_bed.iloc[:,1].astype(int)
+        reference_bed.iloc[:,2] = reference_bed.iloc[:,2].astype(int)
         refBed = pybed.BedTool.from_dataframe(reference_bed.iloc[:,[0,1,2]])
     elif isinstance(reference_bed, pybed.bedtool.BedTool):
         refBed = reference_bed
