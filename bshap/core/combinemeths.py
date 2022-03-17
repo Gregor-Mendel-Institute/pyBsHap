@@ -37,9 +37,11 @@ def getOptimumChunks(num_cols, bits_per_dtype = 4, max_mb_io_speed = 10):
 class CombinedMethsTable(object):
     ## class for a combined meths tables
 
-    def __init__(self, file_paths, file_ids = None, genome = "at_tair10"):
-        self.meths_list = self.load_meths_files(file_paths)
-        self.num_lines = len(self.meths_list)
+    def __init__(self, file_paths, file_ids = None, genome = "at_tair10", load_all= True):
+        if load_all:
+            self.meths_list = self.load_meths_files(file_paths)
+        self._file_path = file_paths
+        self.num_lines = len(file_paths)
         self.genome = g.GenomeClass(genome)
         if file_ids is not None:
             self.file_ids = file_ids
@@ -193,7 +195,7 @@ class EpiMutations(CombinedMethsTable):
 
     """
     def __init__(self, file_paths, combined_meths_hdf5_file, file_ids = None, genome = "at_tair10"):
-        super().__init__( file_paths, file_ids = file_ids, genome = genome )
+        super().__init__( file_paths, file_ids = file_ids, genome = genome, load_all = False )
         self.f_mcs = h5.File(combined_meths_hdf5_file, 'r')
         self.file_ids = np.array(self.f_mcs['file_ids']).astype("U")
 
@@ -306,59 +308,91 @@ class EpiMutations(CombinedMethsTable):
         return(mc_data)
 
 
-    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, mc_total_min = 3, y_min = 20, return_site_ix = False):
+    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, mc_total_min = 3, y_min = 20):
         assert type(sub_populations) is dict, "provide a dictionary with subpoulation ID and index"
 
         mc_count = self.__getattr__('mc_count', filter_cg_pos_ix ) 
         mc_total = self.__getattr__('mc_total', filter_cg_pos_ix ) 
-        mc_permeth = self.__getattr__('permeths', filter_cg_pos_ix ) 
+        # mc_permeth = self.__getattr__('permeths', filter_cg_pos_ix ) 
 
-        epi_out = {}
-        epi_out['permeths_subpop'] = pd.DataFrame(index = filter_cg_pos_ix )
-
-        epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'site_deviation_0', 'site_deviation_1', 'read_total_0', 'read_total_1'] )
-        for ef_pop in sub_populations.items():
-            epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = y_min)
-            t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= 0.2)[0]
-            t_demeth_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] >= 0.8)[0]
-
-            ## Calculate number of cytosines that increase its methylation
-            t_mc_permeths = np.array(mc_permeth[:,ef_pop[1]]).copy()
-            # t_mc_permeths[np.greater_equal(t_mc_permeths, 0.5, where = ~np.isnan(t_mc_permeths))] = 1
-            # t_mc_permeths[np.less(t_mc_permeths, 0.5, where = ~np.isnan(t_mc_permeths))] = 0
-            with np.errstate(invalid='ignore'):
-                t_mc_permeths[t_mc_permeths >= 0.5] = 1
-                t_mc_permeths[t_mc_permeths < 0.5] = 0
-            t_mc_total_0 = (~np.isnan(t_mc_permeths[t_denovo_ix])).sum(0)
-            t_mc_total_1 = (~np.isnan(t_mc_permeths[t_demeth_ix])).sum(0)
-            t_deviation_0 = np_get_fraction(np.nansum(t_mc_permeths[t_denovo_ix], axis = 0), t_mc_total_0, y_min = y_min)
-            t_deviation_1 = 1 - np_get_fraction(np.nansum(t_mc_permeths[t_demeth_ix], axis = 0), t_mc_total_1, y_min = y_min)
-
-            ### Do weighted average for the positions
-            t_pop_mc_count = np.array(mc_count[:,ef_pop[1]], dtype = float).copy()
-            t_pop_mc_total = np.array(mc_total[:,ef_pop[1]], dtype = float).copy()
-            t_pop_mc_count[t_pop_mc_total <= mc_total_min] = np.nan
-            t_pop_mc_total[t_pop_mc_total <= mc_total_min] = np.nan
-            t_mc_read_total_0 = np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 )
-            t_mc_read_total_1 = np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 )
-            t_read_deviation_0 = np_get_fraction(np.nansum( t_pop_mc_count[t_denovo_ix], axis = 0 ), t_mc_read_total_0, y_min = y_min)
-            t_read_deviation_1 = 1 - np_get_fraction(np.nansum( t_pop_mc_count[t_demeth_ix], axis = 0 ), t_mc_read_total_1, y_min = y_min)
-            
-            epi_out['deviations'] = epi_out['deviations'].append(
-                pd.DataFrame( { 
-                    'subpop': ef_pop[0], 
-                    'deviation_0': t_read_deviation_0, 
-                    'deviation_1': t_read_deviation_1,
-                    'mc_total_0': t_mc_total_0,
-                    'mc_total_1': t_mc_total_1,
-                    'site_deviation_0': t_deviation_0, 
-                    'site_deviation_1': t_deviation_1,
-                    'read_total_0': t_mc_total_0,
-                    'read_total_1': t_mc_total_1
-                },
-                index = self.file_ids[ef_pop[1]] )
-            )
+        epi_out = calculate_deviations_per_populations(
+            mc_count, 
+            mc_total, 
+            sub_populations, 
+            min_meth_for_gain = 0.2, 
+            min_meth_for_loss = 0.8, 
+            mc_total_min = mc_total_min, 
+            prop_y_min = y_min
+        )
+        epi_out['permeths_subpop'].index = filter_cg_pos_ix
+        epi_out['deviations'].index = self.file_ids[epi_out['deviations'].index.values]
         return( epi_out )
+
+
+def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, min_meth_for_gain = 0.2, min_meth_for_loss = 0.8, mc_total_min = 3, prop_y_min = 20 ):
+    """
+    Function to estimate the deviations for a given sites. Here is the algorithm
+    Input: 
+        - Provide 2d numpy array for number of cytosines called for each cytosine
+        - provide sub populations as a dictionary with indices (column index in mc_count and mc_total arrays)
+    Analysis
+        1. Calculate methylation average by pooling inds reads on each cytosine for every subpopulations 
+        2. Determine the sites which inherit either a 0 or 1 based on the given thresholds on pooled sub population methylation levels
+        3. Calculate gains and loss for each individual at these sites
+
+    Output:
+        - Methylation average for each of the given cytosine in each subpopulation
+        - Deviations for each individual.
+    """
+    num_snps = mc_count.shape[0]
+    assert mc_count.shape == mc_total.shape, "provide two arrays with same shape"
+    mc_permeth = np_get_fraction(mc_count, mc_total, y_min = mc_total_min) 
+    epi_out = {}
+    epi_out['permeths_subpop'] = pd.DataFrame(index = np.arange( num_snps ) )
+
+    epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'site_deviation_0', 'site_deviation_1', 'read_total_0', 'read_total_1'] )
+    for ef_pop in sub_populations.items():
+        epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = prop_y_min)
+        t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= min_meth_for_gain)[0]
+        t_demeth_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] >= min_meth_for_loss)[0]
+
+        ## Calculate number of cytosines that increase its methylation
+        t_mc_permeths = np.array(mc_permeth[:,ef_pop[1]]).copy()
+        # t_mc_permeths[np.greater_equal(t_mc_permeths, 0.5, where = ~np.isnan(t_mc_permeths))] = 1
+        # t_mc_permeths[np.less(t_mc_permeths, 0.5, where = ~np.isnan(t_mc_permeths))] = 0
+        with np.errstate(invalid='ignore'):
+            t_mc_permeths[t_mc_permeths >= 0.5] = 1
+            t_mc_permeths[t_mc_permeths < 0.5] = 0
+        t_mc_total_0 = (~np.isnan(t_mc_permeths[t_denovo_ix])).sum(0)
+        t_mc_total_1 = (~np.isnan(t_mc_permeths[t_demeth_ix])).sum(0)
+        t_deviation_0 = np_get_fraction(np.nansum(t_mc_permeths[t_denovo_ix], axis = 0), t_mc_total_0, y_min = prop_y_min)
+        t_deviation_1 = 1 - np_get_fraction(np.nansum(t_mc_permeths[t_demeth_ix], axis = 0), t_mc_total_1, y_min = prop_y_min)
+
+        ### Do weighted average for the positions
+        t_pop_mc_count = np.array(mc_count[:,ef_pop[1]], dtype = float).copy()
+        t_pop_mc_total = np.array(mc_total[:,ef_pop[1]], dtype = float).copy()
+        t_pop_mc_count[t_pop_mc_total <= mc_total_min] = np.nan
+        t_pop_mc_total[t_pop_mc_total <= mc_total_min] = np.nan
+        t_mc_read_total_0 = np.nansum( t_pop_mc_total[t_denovo_ix], axis = 0 )
+        t_mc_read_total_1 = np.nansum( t_pop_mc_total[t_demeth_ix], axis = 0 )
+        t_read_deviation_0 = np_get_fraction(np.nansum( t_pop_mc_count[t_denovo_ix], axis = 0 ), t_mc_read_total_0, y_min = prop_y_min)
+        t_read_deviation_1 = 1 - np_get_fraction(np.nansum( t_pop_mc_count[t_demeth_ix], axis = 0 ), t_mc_read_total_1, y_min = prop_y_min)
+        
+        epi_out['deviations'] = epi_out['deviations'].append(
+            pd.DataFrame( { 
+                'subpop': ef_pop[0], 
+                'deviation_0': t_read_deviation_0, 
+                'deviation_1': t_read_deviation_1,
+                'mc_total_0': t_mc_total_0,
+                'mc_total_1': t_mc_total_1,
+                'site_deviation_0': t_deviation_0, 
+                'site_deviation_1': t_deviation_1,
+                'read_total_0': t_mc_total_0,
+                'read_total_1': t_mc_total_1
+            },
+            index = np.array(ef_pop[1]) )
+        )
+    return( epi_out )
 
 
 def write_to_cache_file(file_name, data_key):

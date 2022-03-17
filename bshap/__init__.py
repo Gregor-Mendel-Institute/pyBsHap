@@ -14,6 +14,7 @@ from bshap.core import prebshap
 from bshap.core import bamEdit
 from bshap.core import meth5py
 from bshap.core import combinemeths
+from bshap.core import plotting
 from bshap.core import the1001g
 import logging, logging.config
 
