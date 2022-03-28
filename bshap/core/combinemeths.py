@@ -350,11 +350,16 @@ def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, mi
     epi_out = {}
     epi_out['permeths_subpop'] = pd.DataFrame(index = np.arange( num_snps ) )
 
-    epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'site_deviation_0', 'site_deviation_1', 'read_total_0', 'read_total_1'] )
+    epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'site_deviation_0', 'site_deviation_1', 'site_total_0', 'site_total_1'] )
     for ef_pop in sub_populations.items():
         epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = prop_y_min)
         t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= min_meth_for_gain)[0]
         t_demeth_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] >= min_meth_for_loss)[0]
+
+        epi_out['permeths_subpop']['inherit_0_' + ef_pop[0]] = 0
+        epi_out['permeths_subpop'].loc[t_denovo_ix, 'inherit_0_' + ef_pop[0]]= 1
+        epi_out['permeths_subpop']['inherit_1_' + ef_pop[0]] = 0
+        epi_out['permeths_subpop'].loc[t_demeth_ix, 'inherit_1_' + ef_pop[0]] = 1
 
         ## Calculate number of cytosines that increase its methylation
         t_mc_permeths = np.array(mc_permeth[:,ef_pop[1]]).copy()
@@ -383,17 +388,26 @@ def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, mi
                 'subpop': ef_pop[0], 
                 'deviation_0': t_read_deviation_0, 
                 'deviation_1': t_read_deviation_1,
-                'mc_total_0': t_mc_total_0,
-                'mc_total_1': t_mc_total_1,
+                'mc_total_0': t_mc_read_total_0,
+                'mc_total_1': t_mc_read_total_1,
                 'site_deviation_0': t_deviation_0, 
                 'site_deviation_1': t_deviation_1,
-                'read_total_0': t_mc_total_0,
-                'read_total_1': t_mc_total_1
+                'site_total_0': t_mc_total_0,
+                'site_total_1': t_mc_total_1
             },
             index = np.array(ef_pop[1]) )
         )
     return( epi_out )
 
+
+def cache_pd_variable_to_file(input_variable, var_key, cache_file, mode = 'a'):
+    if cache_file is not None:
+        if op.exists(str(cache_file)):
+            if var_key in h5.File(cache_file, 'r').keys():
+                write_to_cache = False
+                return( pd.read_hdf( cache_file, var_key )  )
+    input_variable.to_hdf( cache_file, key = var_key, mode = mode )
+    return(input_variable)
 
 def write_to_cache_file(file_name, data_key):
     if file_name is not None:
