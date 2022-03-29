@@ -283,32 +283,22 @@ class EpiMutations(CombinedMethsTable):
         if return_contexts:
             context_search = { 'mcs_mcg_inds': b'CG[ATGC]', 'mcs_mchg_inds': b'C[ATC]G','mcs_mchh_inds': b'C[ATC][ATC]' }
             for ef_context in context_search.keys():
-                if cache_file is not None:
-                    if write_to_cache_file(cache_file, ef_context):
-                        mc_data[ef_context] = pd.Series( np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0] )
-                        mc_data[ef_context].to_hdf(cache_file, key=ef_context, mode='a')
-                    else:
-                        mc_data[ef_context] = pd.read_hdf( cache_file, ef_context ) 
-                else:
-                    mc_data[ef_context] = np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0]
-        
+                mc_data[ef_context] = cache_pd_variable_to_file(var_key = ef_context, cache_file = cache_file )
+                if mc_data[ef_context] is None:
+                    mc_data[ef_context] = pd.Series( np.where( pd.Series(self.f_mcs['mc_class']).apply( lambda x: re.match( context_search[ef_context], x ) is not None ) )[0] )
+
         if req_bed_df_dict is None:
             return(mc_data)
 
         query_bed = pd.DataFrame({"chr": np.array(self.f_mcs['chr']).astype('U'), "start": np.array(self.f_mcs['start']) })
         for ef_dict in req_bed_df_dict.keys():
-            if cache_file is not None:
-                if write_to_cache_file(cache_file, 'mcs_' + ef_dict + "_inds"):
-                    mc_data['mcs_' + ef_dict + "_inds"] = pd.Series( run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed) )
-                    mc_data['mcs_' + ef_dict + "_inds"].to_hdf(cache_file, key='mcs_' + ef_dict + "_inds", mode='a')
-                else:
-                    mc_data['mcs_' + ef_dict + "_inds"] = pd.read_hdf( cache_file, 'mcs_' + ef_dict + "_inds" )
-            else:
-                mc_data['mcs_' + ef_dict + "_inds"] = run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed)
+            mc_data['mcs_' + ef_dict + "_inds"] = cache_pd_variable_to_file(var_key = 'mcs_' + ef_dict + "_inds", cache_file = cache_file )
+            if mc_data['mcs_' + ef_dict + "_inds"] is None:
+                mc_data['mcs_' + ef_dict + "_inds"] = pd.Series( run_bedtools.intersect_positions_bed(reference_bed=req_bed_df_dict[ef_dict], query_bed=query_bed) )
         return(mc_data)
 
 
-    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, mc_total_min = 3, y_min = 20):
+    def calculate_per_meths_per_population(self, sub_populations, filter_cg_pos_ix, max_meth_for_gain = 0.2, min_meth_for_loss = 0.8 , mc_total_min = 3, y_min = 20):
         assert type(sub_populations) is dict, "provide a dictionary with subpoulation ID and index"
 
         mc_count = self.__getattr__('mc_count', filter_cg_pos_ix ) 
@@ -319,8 +309,8 @@ class EpiMutations(CombinedMethsTable):
             mc_count, 
             mc_total, 
             sub_populations, 
-            min_meth_for_gain = 0.2, 
-            min_meth_for_loss = 0.8, 
+            max_meth_for_gain = max_meth_for_gain, 
+            min_meth_for_loss = min_meth_for_loss, 
             mc_total_min = mc_total_min, 
             prop_y_min = y_min
         )
@@ -329,7 +319,7 @@ class EpiMutations(CombinedMethsTable):
         return( epi_out )
 
 
-def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, min_meth_for_gain = 0.2, min_meth_for_loss = 0.8, mc_total_min = 3, prop_y_min = 20 ):
+def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, max_meth_for_gain = 0.2, min_meth_for_loss = 0.8, mc_total_min = 3, prop_y_min = 20 ):
     """
     Function to estimate the deviations for a given sites. Here is the algorithm
     Input: 
@@ -353,7 +343,7 @@ def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, mi
     epi_out['deviations'] = pd.DataFrame( columns=['subpop', 'deviation_0', 'deviation_1', 'mc_total_0', 'mc_total_1', 'site_deviation_0', 'site_deviation_1', 'site_total_0', 'site_total_1'] )
     for ef_pop in sub_populations.items():
         epi_out['permeths_subpop'][ef_pop[0]] = np_get_fraction(mc_count[:,ef_pop[1]].sum(1), mc_total[:,ef_pop[1]].sum(1), y_min = prop_y_min)
-        t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= min_meth_for_gain)[0]
+        t_denovo_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] <= max_meth_for_gain)[0]
         t_demeth_ix = np.where(epi_out['permeths_subpop'][ef_pop[0]] >= min_meth_for_loss)[0]
 
         epi_out['permeths_subpop']['inherit_0_' + ef_pop[0]] = 0
@@ -400,27 +390,15 @@ def calculate_deviations_per_populations(mc_count, mc_total, sub_populations, mi
     return( epi_out )
 
 
-def cache_pd_variable_to_file(input_variable, var_key, cache_file, mode = 'a'):
+def cache_pd_variable_to_file(var_key, cache_file, input_variable = None, mode = 'a'):
     if cache_file is not None:
         if op.exists(str(cache_file)):
             if var_key in h5.File(cache_file, 'r').keys():
                 write_to_cache = False
                 return( pd.read_hdf( cache_file, var_key )  )
-    input_variable.to_hdf( cache_file, key = var_key, mode = mode )
+    if input_variable is not None:
+        input_variable.to_hdf( cache_file, key = var_key, mode = mode )
     return(input_variable)
-
-def write_to_cache_file(file_name, data_key):
-    if file_name is not None:
-        if op.exists(str(file_name)):
-            if data_key in h5.File(file_name, 'r').keys():
-                write_to_cache = False
-            else:
-                write_to_cache = True
-        else:
-            write_to_cache = True
-    else:
-        write_to_cache = False
-    return(write_to_cache)
 
 
 
