@@ -25,7 +25,7 @@ def np_get_fraction(x, y, y_min = 0):
         if np.issubdtype(y, np.number):
             if y <= y_min:
                 p = np.nan
-        else
+        else:
             p[np.where(y <= y_min)] = np.nan
     return(p)
 
