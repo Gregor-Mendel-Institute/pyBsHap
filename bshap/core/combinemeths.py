@@ -42,11 +42,11 @@ class CombinedMethsTable(object):
     ## class for a combined meths tables
 
     def __init__(self, file_paths, file_ids = None, genome = "at_tair10", load_all= True):
+        self.genome = g.GenomeClass(genome)
+        self.num_lines = len(file_paths)
+        self._file_path = file_paths
         if load_all:
             self.meths_list = self.load_meths_files(file_paths)
-        self._file_path = file_paths
-        self.num_lines = len(file_paths)
-        self.genome = g.GenomeClass(genome)
         if file_ids is not None:
             self.file_ids = file_ids
         else:
@@ -56,7 +56,7 @@ class CombinedMethsTable(object):
         log.info("reading input files")
         meths_list = []
         for e_path in file_paths:
-            meths_list.append(meth5py.load_hdf5_methylation_file(e_path))
+            meths_list.append(meth5py.load_hdf5_methylation_file(e_path, ref_fasta = self.genome.genome_str))
         log.info("done! input %s files..!" % len(meths_list))
         return(meths_list)
 
