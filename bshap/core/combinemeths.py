@@ -22,11 +22,11 @@ from pygenome import genome as g
 def np_get_fraction(x, y, y_min = 0):
     with np.errstate(divide='ignore', invalid='ignore'):
         p = np.divide( x, y )
-        if np.issubdtype(y, np.number):
-            if y <= y_min:
-                p = np.nan
-        else:
+        if type(y) is np.ndarray:
             p[np.where(y <= y_min)] = np.nan
+        else:
+            if y <= y_min:
+                p = np.nan            
     return(p)
 
 def getOptimumChunks(num_cols, bits_per_dtype = 4, max_mb_io_speed = 10):

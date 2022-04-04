@@ -103,6 +103,7 @@ def get_options(program_license,program_version_message):
     makeCombiAllc = subparsers.add_parser('mergeallc', help = "Merge input allc files from hdf5 format")
     makeCombiAllc.add_argument("-i", dest = "inFiles", nargs='+', help = "Give a list of allc files (hdf5) in here")
     makeCombiAllc.add_argument("-o", dest = "outFile", help = "output hdf5 file combining all the allc")
+    makeCombiAllc.add_argument("--ref_fasta", dest = "ref_fasta", default = "at_tair10", help = "Provide a reference fasta file")
     makeCombiAllc.add_argument("--min_mc_total", dest = "read_threshold", type = int, help = "filter positions with a minimum read depth. If depth is less than given threshold the permeth is -1", default = 3)
     makeCombiAllc.add_argument("--num_info_lines", dest = "num_info_lines", type = int, help = "filter positions with #lines informative.", default = 20)
     makeCombiAllc.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
@@ -174,7 +175,7 @@ def mergeallc(args):
     if len(args['inFiles']) <= 1:
         die("provide a list of paths for hdf5 files")
     log.info("reading input files using meth5py")
-    meths = combinemeths.CombinedMethsTable( args['inFiles'], file_ids =  None)
+    meths = combinemeths.CombinedMethsTable( args['inFiles'], file_ids =  None, genome = args['ref_fasta'] )
     meths_mcs = meths.derive_most_common_positions( args['outFile'], min_mc_total = args['read_threshold'], num_lines_with_info=args['num_info_lines'])
     log.info("done!")
 
