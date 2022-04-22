@@ -116,6 +116,15 @@ def get_options(program_license,program_version_message):
     modifybam.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
     modifybam.set_defaults(func=bshap_modifybam)
 
+
+    calc_conv_p = subparsers.add_parser('calc_conv_rate', help="Calculate best conversion rate from chloroplast. Assuming there is a nuclear copy of chloroplast genome")
+    calc_conv_p.add_argument("-i", "--input_file", dest="inFile", help="Input hdf5 file", required=True)
+    calc_conv_p.add_argument("-f", dest="refGenome", type=str, help="Path for reference fasta file")
+    # calc_conv_p.add_argument("--umeth_control", dest="umeth", help='Unmethylated control to calculate conversion rate', default = None)
+    calc_conv_p.add_argument("-o", "--output", dest="outFile", help="output file")
+    calc_conv_p.add_argument("-v", "--verbose", action="store_true", dest="logDebug", default=False, help="Show verbose debugging output")
+    calc_conv_p.set_defaults(func=estimate_best_conv_rate)
+
     # callmc_parser = subparsers.add_parser('callmc', help="Call mc using methylpy from fastq file")
     # callmc_parser.add_argument("-i", "--input_file", dest="inFile", help="Input fastq file for methylpy")
     # callmc_parser.add_argument("-s", "--sample_id", dest="sample_id", help="unique sample ID for allc Files")
@@ -189,6 +198,18 @@ def write_meth_h5file(args):
     if conv_rate is not None:
         with open(args['output_file'] + '.conv_rate.txt', "w") as out_conv_rate:
             out_conv_rate.write("%s\t%s\n" % (args['input_file'], conv_rate))
+
+
+def estimate_best_conv_rate(args):
+    m = meth5py.load_hdf5_methylation_file(args['inFile'], args['refGenome'])
+    m.estimate_conversion_rate( 
+        unmethylated_chrid = "ChrC", 
+        nuclear_chrid = 'Chr1', 
+        outfile = args['outFile'], 
+        min_conv = 0.0001, 
+        max_conv = 0.08, 
+        step_size = 100
+    )
 
 
 def generate_hdf5(args):
