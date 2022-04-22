@@ -437,8 +437,59 @@ class HDF5MethTable(object):
             chh_gene_meths.to_csv( out_file + ".CHH.bg", sep = "\t", index = False, header = None )
         return(all_gene_meths)
 
-    # def calculate_average_deviations_from_fixed(self, bed_file = None):
 
+    def estimate_conversion_rate(self, unmethylated_chrid = "ChrC", nuclear_chrid = 'Chr1', outfile = None, min_conv = 0.0001, max_conv = 0.08, step_size = 100):
+        """
+        Function to estimate conversion rate from a probabilistic model with binomial sampling each Cytosine
+        Model assumes, there are inserts of chloroplast genome in nuclear genome which are methylated.
+
+        1. We estimate copy number for chloroplast for a given nuclear copy (fraction of read depth for chloroplast vs nuclear reads )
+        2. If you randomly sample 10 reads mapped to chloroplast, you should see methylation as Binomial(10, 1/copy number of chloroplast)
+        3. Any given non-conversion adds to the number of cytosines we see
+        4. We calculate the best conversion rate from a posterior distribution
+
+        """
+        from . import conv_rates
+        import torch
+        unmeth_pos_ix = self.get_chrinds( unmethylated_chrid )
+        log.info("reading first 1Mb in %s" % nuclear_chrid)
+        nuclear_ind = self.get_filter_inds( nuclear_chrid + ",1,1000000" ) ### loading first 1MB for the chromosome
+        sample_depth = self.__getattr__('mc_total', nuclear_ind, return_np=True)
+        sample_depth = sample_depth[sample_depth > 0]
+
+        mc_count = self.__getattr__('mc_count', np.arange( unmeth_pos_ix[1][0], unmeth_pos_ix[1][1] ), return_np=True)
+        mc_total = self.__getattr__('mc_total', np.arange( unmeth_pos_ix[1][0], unmeth_pos_ix[1][1] ), return_np=True)
+        mc_count = mc_count[mc_total > 0]
+        mc_total = mc_total[mc_total > 0]
+        num_pos = mc_total.shape[0]
+        log.info("number of positions #%s in %s" % (num_pos, unmethylated_chrid ))
+
+        outdata = {}
+        outdata['conv_rates'] = np.linspace(min_conv, max_conv, step_size)
+        outdata['df'] = pd.DataFrame( index = outdata['conv_rates'], columns=np.arange(100) )
+        outdata['posterior'] = np.zeros(0)
+        outdata['cnv_unmeth'] = mc_total.mean(0) / sample_depth.mean(0)
+        outdata['cobs'] = mc_count.mean(0) / mc_total.mean(0)
+
+        for ef_conv in outdata['conv_rates']:
+            log.info("fitting a binomial sampling model")
+            ef_model = conv_rates.CytosineModel(
+                conv_rate=ef_conv, 
+                relative_copy_chrc=torch.tensor(int(outdata['cnv_unmeth'])), 
+                depth = torch.tensor(mc_total) 
+            )
+
+            ef_likelihood = ef_model.log_prob( mc_count )
+            for ef_iter in outdata['df'].columns:
+                ef_pos_ix = np.sort(np.random.randint(0, num_pos, 500))
+                outdata['df'].loc[ef_conv,ef_iter] = float( ef_likelihood[ef_pos_ix].sum() )
+        outdata['best_conv_rate'] = outdata['conv_rates'][ np.argmax(outdata['df'].mean(1)) ]
+        log.info("writing conversion rates")
+        if outfile is not None:
+            outdata['df'].to_csv( outfile + ".posteriors.csv" )
+            with open( outfile + '.conv_rate.txt', "w") as out_conv_rate:
+                out_conv_rate.write("%s\t%s\t%s\n" % (op.basename(self.h5file.filename), outdata['cobs'], outdata['best_conv_rate']))
+        return(outdata)
 
 
 def potatoskin_methylation_averages(args):
