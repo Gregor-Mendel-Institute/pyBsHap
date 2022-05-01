@@ -159,7 +159,7 @@ def quadrant_plot(x, y, plt_limits = {}, plt_options = {}, **kwargs):
 
 ## A joint plot using seaborn
 
-def meths_jointplot(x, y, reqcond, axs = None, min_sum=None, **kwargs):
+def meths_jointplot(x, y, reqcond = {}, axs = None, min_sum=None, **kwargs):
     ## reqcond is a dictionry with values given below.
     # 1) reqcond['color']
     # 2) reqcond['xlab']
