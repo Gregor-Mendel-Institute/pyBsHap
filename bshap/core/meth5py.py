@@ -3,6 +3,8 @@
 import logging
 import h5py as h5
 import numpy as np
+import scipy as sp
+from scipy import stats as spstats
 import pandas as pd
 import os
 import os.path as op
@@ -15,7 +17,15 @@ import itertools
 import re
 
 log = logging.getLogger(__name__)
-
+def np_get_fraction(x, y, y_min = 0):
+    with np.errstate(divide='ignore', invalid='ignore'):
+        p = np.divide( x, y )
+        if type(y) is np.ndarray:
+            p[np.where(y <= y_min)] = np.nan
+        else:
+            if y <= y_min:
+                p = np.nan            
+    return(p)
 
 def die(msg):
   sys.stderr.write('Error: ' + msg + '\n')
@@ -133,9 +143,9 @@ class HDF5MethTable(object):
                 refBed = self.get_bed_df(filter_pos_ix = np.arange(chr_inds[0], chr_inds[1]), full_bed=False)
             else:
                 refBed = self.get_bed_df(filter_pos_ix = np.arange(self.__getattr__('pos').shape[0]), full_bed=False)
-            req_inds_df = run_bedtools.get_intersect_bed_ix(reference_bed=refBed, query_bed=bin_bed, just_names=False)
+            req_inds_df = run_bedtools.intersect_positions_bed(reference_bed=bin_bed.iloc[:,[0,1,2]], query_bed=refBed.iloc[:,[0,1]])
             if t_chr.shape[0] == 1:
-                req_inds_df['ref_ix'] = req_inds_df['ref_ix'] + chr_inds[0]
+                req_inds_df = req_inds_df + chr_inds[0]
             return(req_inds_df)
         elif bin_bed is None:
             return(None)
@@ -180,10 +190,15 @@ class HDF5MethTable(object):
     def get_bed_df(self, filter_pos_ix, full_bed=False, read_threshold=0):
         req_chrs = self.__getattr__('chr', filter_pos_ix, return_np=True)
         req_pos = self.__getattr__('pos', filter_pos_ix, return_np=True)
-        conname = self.__getattr__('mc_class', filter_pos_ix, return_np=True )
-        strand = self.__getattr__('strand', filter_pos_ix, return_np=True)
-        mc_df = pd.DataFrame(np.column_stack((req_chrs, req_pos, req_pos + 1, conname, strand)), columns=['chr', 'start', 'end', 'mc_class', 'strand'])
+        mc_df = pd.DataFrame({
+            "chr": req_chrs,
+            "start": req_pos,
+            "end": req_pos + 1
+
+        })
         if full_bed:
+            mc_df['mc_class'] = self.__getattr__('mc_class', filter_pos_ix, return_np=True )
+            mc_df['strand'] = self.__getattr__('strand', filter_pos_ix, return_np=True)
             # mc_df['permeth'] = self.get_permeths(filter_pos_ix, read_threshold=read_threshold)
             mc_df['mc_count'] = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
             mc_df['mc_total'] = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
@@ -203,14 +218,37 @@ class HDF5MethTable(object):
         np_vmatch = np.vectorize(lambda x:bool(cor.match(x)))
         return(np.where(np_vmatch(self.__getattr__('mc_class', filter_pos_ix, return_np=True )))[0])
 
-    def get_lowfreq(self, filter_pos_ix=None):
-        if filter_pos_ix is None:
-            return(np.array(self.h5file['lowfreq']))
-        elif type(filter_pos_ix) is np.ndarray:
-            rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-            return(self.h5file['lowfreq'][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
-        else:
-            return(self.h5file['lowfreq'][filter_pos_ix])
+    def get_deviations(self, req_bed, req_mc_class = "CG[ATGC]", max_mc_inherit0 = 0.4, min_mc_inherit1 = 0.6, conv_rate = 0.03, min_mc_total = 3, prop_y_min = 20):
+        """
+        Model
+            First, we classify each cytosine whether it inherited a methylated or un-methylated state.
+            If a mC is less than say 0.5, we assume it is unmethylated in zygote. Similarly, if mC is more than 0.5 it had methylated state.
+
+            Second, we take weighted average of all the cytosines which inherited a unmethylated state and call it deviations from 0
+            or methylation levels on cytosines that are methylated would be deviations from 1 or demethylation.
+
+        """
+        filter_pos_ix = self.get_filter_inds( req_bed )
+        filter_pos_ix = filter_pos_ix[self.get_req_mc_class_ix( req_mc_class, filter_pos_ix )]
+        mc_count = self.__getattr__("mc_count", filter_pos_ix)
+        mc_total = self.__getattr__("mc_total", filter_pos_ix)
+        ## Perform a binomial test to remove sites say 1 methylated cytosines with 3 reads
+        t_pop_sig = spstats.binom.sf( mc_count - 1, mc_total, conv_rate )
+        mc_count[ t_pop_sig > 0.05 ] = 0
+        ## Calcualate permeths
+        mc_permeths = np_get_fraction(mc_count, mc_total, y_min = min_mc_total )
+
+        inherit_0_ix = np.where(mc_permeths <= max_mc_inherit0)[0]
+        inherit_1_ix = np.where(mc_permeths >= min_mc_inherit1)[0]
+
+
+        output_data = {}
+        output_data['mc_total_0'] = mc_total[inherit_0_ix].sum()
+        output_data['deviation_0'] = np_get_fraction(mc_count[inherit_0_ix].sum(), output_data['mc_total_0'], prop_y_min)
+        output_data['mc_total_1'] = mc_total[inherit_1_ix].sum()
+        output_data['deviation_1'] = 1 - np_get_fraction(mc_count[inherit_1_ix].sum(), output_data['mc_total_1'], prop_y_min)
+
+        return(output_data)
 
     def get_permeths(self, filter_pos_ix=None, read_threshold=0):
         # If read_threshold is given
