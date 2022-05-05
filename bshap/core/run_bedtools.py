@@ -30,6 +30,12 @@ def identify_positions_given_names(in_file, araport11_file):
     return(req_bed_df)
 
 def intersect_positions_bed(reference_bed, query_bed):
+    """
+    Function to identify overlapped positions in query bed from reference bed
+    
+    Input: 
+        Two pandas dataframes, query_bed is a two column
+    """
     assert isinstance(query_bed, pd.DataFrame), "provide a dataframe object" 
     assert query_bed.shape[1] == 2, "provide a dataframe object with only two columns, else use `get_intersect_bed_ix` function"
     assert isinstance(reference_bed, pd.DataFrame), "provide a dataframe object"
