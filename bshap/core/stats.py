@@ -34,3 +34,25 @@ def differential_methylation(meths_x, meths_y, req_inds):
     permeths_y = meths_y.get_permeths(meths_y.filter_pos_ix[req_inds])
     cm = sms.CompareMeans(sms.DescrStatsW(permeths_x), sms.DescrStatsW(permeths_y))
     return(cm.ttest_ind())
+
+
+def pivot_mCs_required_bed(mc_bed, req_start_df, min_bp = 5000):
+    """
+    Function to take mean at each position based on its distance from another start file
+    """
+    assert type(mc_bed) is pd.DataFrame, "provide a dataframe"
+    assert type(req_start_df) is pd.DataFrame, "provide a dataframe"
+    assert mc_bed.shape[1] == 2, "provide a dataframe with index and mC/phenotype"
+    mc_start_mat = np.tile( mc_bed.iloc[:,0].values, (req_start_df.shape[0], 1) ).T
+    mc_pheno_mat = np.tile( mc_bed.iloc[:,1].values, (req_start_df.shape[0], 1) ).T
+    req_bed_mat = np.tile( req_start_df.iloc[:,0].values, (mc_bed.shape[0], 1) )
+    start_diff_mat = mc_start_mat - req_bed_mat
+    req_positions_ix = np.where(np.abs(start_diff_mat) < min_bp)
+
+    dist_positions = start_diff_mat[req_positions_ix]
+    pheno_positions = mc_pheno_mat[req_positions_ix]
+
+    sorted_by_dist_ix = np.argsort(dist_positions)
+    output_df = pd.DataFrame( np.column_stack([dist_positions[sorted_by_dist_ix], pheno_positions[sorted_by_dist_ix]]), columns = ['dist', 'pheno'] )
+    output_df = output_df.groupby('dist', sort = False).mean()
+    return( output_df )

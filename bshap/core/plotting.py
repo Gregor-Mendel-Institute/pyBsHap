@@ -167,7 +167,8 @@ def meths_jointplot(x, y, reqcond = {}, axs = None, min_sum=None, **kwargs):
     # 4) reqcond['plt_limits']
     # 4) reqcond['size']
     if min_sum is not None:
-        filter_inds = np.where(x + y > min_sum)[0]
+        with np.errstate(invalid='ignore'):
+            filter_inds = np.where(x + y > min_sum)[0]
         x = pd.Series(x).iloc[filter_inds]
         y = pd.Series(y).iloc[filter_inds]
     if 'color' not in reqcond:
