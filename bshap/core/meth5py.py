@@ -252,7 +252,6 @@ class HDF5MethTable(object):
             filter_pos_ix = filter_pos_ix[self.get_req_mc_class_ix( req_mc_class, filter_pos_ix )]
         else:
             input_pos_bed = self.get_bed_df(filter_pos_ix = filter_positions, full_bed=False)
-            import ipdb; ipdb.set_trace()
             assert type(req_bed) == pd.DataFrame, "please provide a pandas dataframe for the bed regions. columns: chr, start, end"
             req_inds_df = run_bedtools.intersect_positions_bed(reference_bed=req_bed.iloc[:,[0,1,2]], query_bed=input_pos_bed.iloc[:,[0,1]])
             filter_pos_ix = filter_positions[req_inds_df]
