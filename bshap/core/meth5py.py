@@ -425,7 +425,7 @@ class HDF5MethTable(object):
             if calc_for_each:
                 t_filter_pos_ix = self.get_filter_inds( [er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]) ] )
             else:
-                t_filter_pos_ix = mat_positions.loc[mat_positions['query_ix'] == np.where(req_regions.index.values == er[0])[0][0],'ref_ix'].values
+                t_filter_pos_ix = mat_positions.loc[mat_positions['ref_ix'] == np.where(req_regions.index.values == er[0])[0][0],'query_ix'].values
             count = 0
             t_count = self._TotalCounts_All_Contexts( t_filter_pos_ix )
             req_meth_avg = self._AveMethylation_All_Contexts(t_filter_pos_ix, category)
