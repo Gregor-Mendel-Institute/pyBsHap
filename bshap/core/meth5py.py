@@ -430,9 +430,9 @@ class HDF5MethTable(object):
             req_regions[ef_context + "_total"] = ef_mat_positions['mc_total']
 
         if out_file is not None:
-            req_regions.loc[:,['chr', 'start', 'end', 'cg', 'cg_total']].to_csv(out_file + ".CG.bg", index = None, header = None, sep = "\t")
-            req_regions.loc[:,['chr', 'start', 'end', 'chg', 'chg_total']].to_csv(out_file + ".CHG.bg", index = None, header = None, sep = "\t")
-            req_regions.loc[:,['chr', 'start', 'end', 'chh', 'chh_total']].to_csv(out_file + ".CHH.bg", index = None, header = None, sep = "\t")
+            req_regions.loc[:,['chr', 'start', 'end', 'CG', 'CG_total']].to_csv(out_file + ".CG.bg", index = None, header = None, sep = "\t")
+            req_regions.loc[:,['chr', 'start', 'end', 'CHG', 'CHG_total']].to_csv(out_file + ".CHG.bg", index = None, header = None, sep = "\t")
+            req_regions.loc[:,['chr', 'start', 'end', 'CHH', 'CHH_total']].to_csv(out_file + ".CHH.bg", index = None, header = None, sep = "\t")
             if indexed_bed:
                 req_regions.to_csv( out_file + ".csv" )
         return(req_regions)
