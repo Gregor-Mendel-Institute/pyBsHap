@@ -131,7 +131,14 @@ class HDF5MethTable(object):
         req_chr_ind = self.genome.get_chr_ind(chrid)
         if req_chr_ind is None:
             return( (None, None) )
-        chr_inds = [self.chrpositions[req_chr_ind], self.chrpositions[req_chr_ind + 1]]
+        if len(self.genome.chrs) + 1 == len(self.chrpositions):
+            chr_inds = [self.chrpositions[req_chr_ind], self.chrpositions[req_chr_ind + 1]]
+        else:
+            sample_chrs = self.__getattr__("chr", None, return_np= True )
+            chr_inds = [
+                np.searchsorted(sample_chrs, self.genome.chrs[req_chr_ind], 'left'),
+                np.searchsorted(sample_chrs, self.genome.chrs[req_chr_ind], 'right')
+            ]
         return((req_chr_ind, chr_inds))
 
     def get_filter_inds(self, bin_bed = None, return_full_dataframe = False):
