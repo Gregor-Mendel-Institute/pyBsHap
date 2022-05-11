@@ -19,6 +19,8 @@ def sort_bed_df(bed_df):
     new_bed_df.loc[new_bed_df['start'] > new_bed_df['end'],'strand'] = '-'
     new_bed_df.loc[new_bed_df['strand'] == '-', ['start','end']] = new_bed_df.loc[new_bed_df['strand'] == '-', ['end','start']].values
     new_bed_df = new_bed_df.sort_values(['chr', 'start'])
+    new_bed_df.iloc[:,1] = new_bed_df.iloc[:,1].astype(int)
+    new_bed_df.iloc[:,2] = new_bed_df.iloc[:,2].astype(int)
     return(new_bed_df)
 
 def identify_positions_given_names(in_file, araport11_file):

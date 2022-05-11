@@ -196,8 +196,10 @@ class HDF5MethTable(object):
             if len(filter_pos_ix) == 0:
                 ret_attr = np.array(())
             else:
-                rel_pos_ix = filter_pos_ix - filter_pos_ix[0]
-                ret_attr = np.array(self.h5file[str(name)][filter_pos_ix[0]:filter_pos_ix[-1]+1][rel_pos_ix])
+                sorted_unique_filter_pos_ix = np.unique(np.sort(filter_pos_ix))
+                rel_pos_ix = sorted_unique_filter_pos_ix - sorted_unique_filter_pos_ix[0]
+                ret_attr = np.array(self.h5file[str(name)][sorted_unique_filter_pos_ix[0]:sorted_unique_filter_pos_ix[-1]+1][rel_pos_ix])
+                ret_attr = pd.Series(ret_attr, index = sorted_unique_filter_pos_ix ).loc[filter_pos_ix].values
         else:
             ret_attr = np.array(self.h5file[str(name)][filter_pos_ix])
         if name in ['chr', 'mc_class', 'strand']:
@@ -395,7 +397,7 @@ class HDF5MethTable(object):
         outmeths_chh_avg.close()
         log.info("done!")
 
-    def generate_meth_average_required_bed(self, required_bed, out_file = None, sort_bed = True, category=1):
+    def generate_meth_average_required_bed(self, required_bed, out_file = None, sort_bed = True, min_depth_per_cytosine = 3):
         indexed_bed = False
         if type(required_bed) is str:
             if op.isfile(required_bed):
@@ -412,41 +414,28 @@ class HDF5MethTable(object):
         if sort_bed:
             req_regions = run_bedtools.sort_bed_df(req_regions)
         assert len(req_regions.columns) >= 3, "bed file should have minimum of 3 columns. eg., Chr, Start, End"
+
+        mat_positions = self.get_filter_inds( req_regions, return_full_dataframe = True)
+        mat_positions['mc_count'] = self.__getattr__("mc_count", mat_positions['query_ix'].values)
+        mat_positions['mc_total'] = self.__getattr__("mc_total", mat_positions['query_ix'].values)
+        mat_positions = mat_positions[ mat_positions['mc_total'] > min_depth_per_cytosine ]
+
+        for ef_context, ef_search_context in zip( ['CG', 'CHG', 'CHH'], ["CG[ATGC]", "C[ATC]G", "C[ATC][ATC]"] ):
+            ef_mat_positions = mat_positions.iloc[ self.get_req_mc_class_ix(ef_search_context, mat_positions['query_ix'].values), : ]
+            ef_mat_positions = ef_mat_positions.loc[:,['ref_ix', 'mc_count', 'mc_total']].groupby("ref_ix").sum()
+            ef_mat_positions['permeth'] = np_get_fraction( ef_mat_positions['mc_count'].values, ef_mat_positions['mc_total'].values, y_min = min_depth_per_cytosine )
+            ef_mat_positions.index = req_regions.index[ef_mat_positions.index]
+            
+            req_regions[ef_context] = ef_mat_positions['permeth']
+            req_regions[ef_context + "_total"] = ef_mat_positions['mc_total']
+
         if out_file is not None:
-            outmeths_cg_avg = open(out_file + ".CG.bg", 'w')
-            outmeths_chg_avg = open(out_file + ".CHG.bg", 'w')
-            outmeths_chh_avg = open(out_file + ".CHH.bg", 'w')
-        output_meths = pd.DataFrame( index = req_regions.index, columns = ['cg', 'chg', 'chh'] )
-        calc_for_each = True
-        if req_regions.shape[0] > 10:
-            mat_positions = self.get_filter_inds( req_regions, return_full_dataframe = True)
-            calc_for_each = False
-        for er in req_regions.iterrows():
-            if calc_for_each:
-                t_filter_pos_ix = self.get_filter_inds( [er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]) ] )
-            else:
-                t_filter_pos_ix = mat_positions.loc[mat_positions['ref_ix'] == np.where(req_regions.index.values == er[0])[0][0],'query_ix'].values
-            count = 0
-            t_count = self._TotalCounts_All_Contexts( t_filter_pos_ix )
-            req_meth_avg = self._AveMethylation_All_Contexts(t_filter_pos_ix, category)
-            if out_file is not None:
-                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]), req_meth_avg[0], len(t_count[0])))
-                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]), req_meth_avg[1], len(t_count[1])))
-                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (er[1].iloc[0], int(er[1].iloc[1]), int(er[1].iloc[2]), req_meth_avg[2], len(t_count[2])))
-            output_meths.loc[er[0], 'cg'] = req_meth_avg[0]
-            output_meths.loc[er[0], 'chg'] = req_meth_avg[1]
-            output_meths.loc[er[0], 'chh'] = req_meth_avg[2]
-            count = count + 1
-            if count % 100 == 0:
-                log.info("progress: analysed %s regions" % count)
-        if out_file is not None:
-            outmeths_cg_avg.close()
-            outmeths_chg_avg.close()
-            outmeths_chh_avg.close()
+            req_regions.loc[:,['chr', 'start', 'end', 'cg', 'cg_total']].to_csv(out_file + ".CG.bg", index = None, header = None, sep = "\t")
+            req_regions.loc[:,['chr', 'start', 'end', 'chg', 'chg_total']].to_csv(out_file + ".CHG.bg", index = None, header = None, sep = "\t")
+            req_regions.loc[:,['chr', 'start', 'end', 'chh', 'chh_total']].to_csv(out_file + ".CHH.bg", index = None, header = None, sep = "\t")
             if indexed_bed:
-                output_meths.to_csv( out_file + ".csv" )
-        log.info("done!")
-        return(output_meths)
+                req_regions.to_csv( out_file + ".csv" )
+        return(req_regions)
 
     def calculate_gbm_exon_only(self, input_gff_db, gene_id, out_file = None):
         """
@@ -486,15 +475,15 @@ class HDF5MethTable(object):
                 chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
                 chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
         else: 
-            all_genes_cds_pos_ix = self.get_filter_inds( t_gene_exons )
+            all_genes_cds_pos_ix = self.get_filter_inds( t_gene_exons, return_full_dataframe = True )
             for ef_gene in gene_id:
                 t_gene_cds_pos_ix = np.unique( 
                     all_genes_cds_pos_ix.loc[
                         np.isin(
-                            all_genes_cds_pos_ix['query_ix'], 
+                            all_genes_cds_pos_ix['ref_ix'], 
                             np.where( t_gene_exons['geneid'] == ef_gene  )[0]
                         ), 
-                        'ref_ix'
+                        'query_ix'
                     ].values)
                 ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
                 ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
