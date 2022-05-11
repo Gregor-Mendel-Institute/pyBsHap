@@ -134,31 +134,45 @@ class HDF5MethTable(object):
         chr_inds = [self.chrpositions[req_chr_ind], self.chrpositions[req_chr_ind + 1]]
         return((req_chr_ind, chr_inds))
 
-    def get_filter_inds(self, bin_bed = None):
+    def get_filter_inds(self, bin_bed = None, return_full_dataframe = False):
+        """
+        Function to identify position indices that overlap a given region
+        """
         # bin_bed = ['Chr1', 0, 100] or "Chr1,1,100"
-        if isinstance(bin_bed, pd.DataFrame):
-            t_chr = np.unique(bin_bed.iloc[:,0])
-            if t_chr.shape[0] == 1:
-                req_chr_ind, chr_inds = self.get_chrinds(t_chr[0])
-                refBed = self.get_bed_df(filter_pos_ix = np.arange(chr_inds[0], chr_inds[1]), full_bed=False)
-            else:
-                refBed = self.get_bed_df(filter_pos_ix = np.arange(self.__getattr__('pos').shape[0]), full_bed=False)
-            req_inds_df = run_bedtools.intersect_positions_bed(reference_bed=bin_bed.iloc[:,[0,1,2]], query_bed=refBed.iloc[:,[0,1]])
-            if t_chr.shape[0] == 1:
-                req_inds_df = req_inds_df + chr_inds[0]
-            return(req_inds_df)
-        elif bin_bed is None:
+        if bin_bed is None:
             return(None)
         elif isinstance(bin_bed, str):
             t_split = bin_bed.split(",")
             assert len(t_split) == 3, "please genomic position as 'Chr1,1,100'"
             bin_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
-        assert len(bin_bed) == 3, "please genomic position as ['Chr1', 1, 100]"
-        req_chr_ind, chr_inds = self.get_chrinds(bin_bed[0])
-        if req_chr_ind is None:
-            return(np.zeros(0, dtype=int))
-        req_inds = chr_inds[0] + np.searchsorted(self.positions[chr_inds[0]:chr_inds[1]], [bin_bed[1],bin_bed[2]], side='right')
-        return(np.arange(req_inds[0],req_inds[1]))
+            req_chr_ind, chr_inds = self.get_chrinds(bin_bed[0])
+            if req_chr_ind is None:
+                return(np.zeros(0, dtype=int))
+            req_inds = chr_inds[0] + np.searchsorted(self.positions[chr_inds[0]:chr_inds[1]], [bin_bed[1],bin_bed[2]], side='right')
+            return(np.arange(req_inds[0],req_inds[1]))
+        elif type(bin_bed) == pd.Series: 
+            ## pandas series with chr,start,end
+            bin_bed = bin_bed.str.split(",", expand = True )
+            bin_bed.iloc[:,1] = bin_bed.iloc[:,1].astype(int)
+            bin_bed.iloc[:,2] = bin_bed.iloc[:,2].astype(int)
+
+        assert type(bin_bed) == pd.DataFrame, "please provide a data frame for the bed regions, columns as chr, start and end"
+        t_chr = np.unique(bin_bed.iloc[:,0])
+        if t_chr.shape[0] == 1:
+            req_chr_ind, chr_inds = self.get_chrinds(t_chr[0])
+            refBed = self.get_bed_df(filter_pos_ix = np.arange(chr_inds[0], chr_inds[1]), full_bed=False)
+        else:
+            refBed = self.get_bed_df(filter_pos_ix = np.arange(self.__getattr__('pos').shape[0]), full_bed=False)
+        if return_full_dataframe:
+            req_inds_df = run_bedtools.get_intersect_bed_ix(reference_bed=bin_bed.iloc[:,[0,1,2]], query_bed=refBed.iloc[:,[0,1,2]], just_names = False)
+            if t_chr.shape[0] == 1:
+                req_inds_df['ref_ix'] = req_inds_df['ref_ix'] + chr_inds[0]
+        else:
+            req_inds_df = run_bedtools.intersect_positions_bed(reference_bed=bin_bed.iloc[:,[0,1,2]], query_bed=refBed.iloc[:,[0,1]])
+            if t_chr.shape[0] == 1:
+                req_inds_df = req_inds_df + chr_inds[0]
+        return(req_inds_df)
+        
 
     def __getattr__(self, name, filter_pos_ix=None, return_np=False):
         req_names = ['chr', 'position', 'pos', 'positions', 'methylated', 'strand', 'mc_count', 'mc_class', 'total', 'mc_total']
@@ -400,7 +414,7 @@ class HDF5MethTable(object):
         output_meths = pd.DataFrame( index = req_regions.index, columns = ['cg', 'chg', 'chh'] )
         calc_for_each = True
         if req_regions.shape[0] > 10:
-            mat_positions = self.get_filter_inds( req_regions )
+            mat_positions = self.get_filter_inds( req_regions, return_full_dataframe = True)
             calc_for_each = False
         for er in req_regions.iterrows():
             if calc_for_each:
