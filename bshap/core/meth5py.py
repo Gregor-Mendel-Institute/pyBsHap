@@ -218,7 +218,7 @@ class HDF5MethTable(object):
         np_vmatch = np.vectorize(lambda x:bool(cor.match(x)))
         return(np.where(np_vmatch(self.__getattr__('mc_class', filter_pos_ix, return_np=True )))[0])
 
-    def get_deviations(self, req_bed, req_mc_class = "CG[ATGC]", max_mc_inherit0 = 0.4, min_mc_inherit1 = 0.6, conv_rate = 0.03, min_mc_total = 3, prop_y_min = 20):
+    def get_deviations(self, req_bed, filter_positions = None, req_mc_class = "CG[ATGC]", max_mc_inherit0 = 0.4, min_mc_inherit1 = 0.6, conv_rate = 0.03, min_mc_total = 3, prop_y_min = 20):
         """
         Model
             First, we classify each cytosine whether it inherited a methylated or un-methylated state.
@@ -228,8 +228,15 @@ class HDF5MethTable(object):
             or methylation levels on cytosines that are methylated would be deviations from 1 or demethylation.
 
         """
-        filter_pos_ix = self.get_filter_inds( req_bed )
-        filter_pos_ix = filter_pos_ix[self.get_req_mc_class_ix( req_mc_class, filter_pos_ix )]
+        if filter_positions is None:
+            filter_pos_ix = self.get_filter_inds( req_bed )
+            filter_pos_ix = filter_pos_ix[self.get_req_mc_class_ix( req_mc_class, filter_pos_ix )]
+        else:
+            input_pos_bed = self.get_bed_df(filter_pos_ix = filter_positions, full_bed=False)
+            assert type(req_bed) == pd.DataFrame, "please provide a pandas dataframe for the bed regions. columns: chr, start, end"
+            req_inds_df = run_bedtools.intersect_positions_bed(reference_bed=req_bed.iloc[:,[0,1,2]], query_bed=input_pos_bed.iloc[:,[0,1]])
+            filter_pos_ix = filter_positions[req_inds_df]
+            filter_pos_ix = filter_pos_ix[self.get_req_mc_class_ix( req_mc_class, filter_pos_ix )]
         mc_count = self.__getattr__("mc_count", filter_pos_ix)
         mc_total = self.__getattr__("mc_total", filter_pos_ix)
         ## Perform a binomial test to remove sites say 1 methylated cytosines with 3 reads
@@ -238,9 +245,9 @@ class HDF5MethTable(object):
         ## Calcualate permeths
         mc_permeths = np_get_fraction(mc_count, mc_total, y_min = min_mc_total )
 
-        inherit_0_ix = np.where(mc_permeths <= max_mc_inherit0)[0]
-        inherit_1_ix = np.where(mc_permeths >= min_mc_inherit1)[0]
-
+        with np.errstate(invalid='ignore'):
+            inherit_0_ix = np.where(mc_permeths <= max_mc_inherit0)[0]
+            inherit_1_ix = np.where(mc_permeths >= min_mc_inherit1)[0]
 
         output_data = {}
         output_data['mc_total_0'] = mc_total[inherit_0_ix].sum()
@@ -269,6 +276,13 @@ class HDF5MethTable(object):
             new_filter_pos_ix = np.where(mc_total > read_threshold)[0]
             permeths[new_filter_pos_ix] = calculated_permeths[new_filter_pos_ix]
             return(permeths)
+
+    def iter_genome_windows(self, window_size):
+        for echr, echrlen in zip(self.genome.chrs, self.genome.golden_chrlen):
+            self_windows = self.iter_chr_windows(echr, window_size)
+            for ef_window in self_windows:
+                yield([echr, ef_window[0], ef_window[1] ]  )
+
 
     def iter_chr_windows(self, chrid, window_size):
         req_chr_ind = self.genome.get_chr_ind(chrid)
