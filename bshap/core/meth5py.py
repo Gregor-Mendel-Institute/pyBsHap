@@ -137,14 +137,19 @@ class HDF5MethTable(object):
     def get_filter_inds(self, bin_bed = None, return_full_dataframe = False):
         """
         Function to identify position indices that overlap a given region
+        Input can be
+        1. ['Chr1', 0, 100]
+        2. "Chr1,1,100"
+        3. pandas series, ex. pd.Series( ["Chr1,1,100"] )
+        4. pandas dataframe, ex. pd.DataFrame( {"chr": ["Chr1"], "start": [1], "end": [100]} )
         """
-        # bin_bed = ['Chr1', 0, 100] or "Chr1,1,100"
         if bin_bed is None:
             return(None)
-        elif isinstance(bin_bed, str):
-            t_split = bin_bed.split(",")
-            assert len(t_split) == 3, "please genomic position as 'Chr1,1,100'"
-            bin_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
+        elif isinstance(bin_bed, str) or isinstance(bin_bed, list):
+            if isinstance(bin_bed, str):
+                t_split = bin_bed.split(",")
+                assert len(t_split) == 3, "please provide bed region as 'Chr1,1,100'"
+                bin_bed = [ t_split[0], int(t_split[1]), int(t_split[2]) ]
             req_chr_ind, chr_inds = self.get_chrinds(bin_bed[0])
             if req_chr_ind is None:
                 return(np.zeros(0, dtype=int))
@@ -247,6 +252,7 @@ class HDF5MethTable(object):
             filter_pos_ix = filter_pos_ix[self.get_req_mc_class_ix( req_mc_class, filter_pos_ix )]
         else:
             input_pos_bed = self.get_bed_df(filter_pos_ix = filter_positions, full_bed=False)
+            import ipdb; ipdb.set_trace()
             assert type(req_bed) == pd.DataFrame, "please provide a pandas dataframe for the bed regions. columns: chr, start, end"
             req_inds_df = run_bedtools.intersect_positions_bed(reference_bed=req_bed.iloc[:,[0,1,2]], query_bed=input_pos_bed.iloc[:,[0,1]])
             filter_pos_ix = filter_positions[req_inds_df]
