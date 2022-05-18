@@ -341,30 +341,31 @@ class HDF5MethTable(object):
     def MethylationSummaryStats(self, filter_pos_ix, category = 1, req_context = None, min_depth = 3):
         # meths is already filtered for bin_bed positions
         if filter_pos_ix is None:
-            return(np.nan)
+            return((np.nan, 0))
         if len(filter_pos_ix) == 0:
-            return(np.nan)
+            return((np.nan, 0))
         # Filtering for context
         if req_context is not None:
             filter_pos_ix = np.array(filter_pos_ix, dtype=int)[self.get_req_mc_class_ix(req_context, filter_pos_ix)]
             if len(filter_pos_ix) == 0:
-                return(np.nan)
+                return((np.nan, 0))
         mc_total = self.__getattr__('mc_total', filter_pos_ix, return_np=True)
         mc_count = self.__getattr__('mc_count', filter_pos_ix, return_np=True)
         if np.sum(mc_total) == 0:
-            return(np.nan)
+            return((np.nan, 0))
         if category == 1:   # weighted mean
             methylated_cs = np.where(mc_total >= min_depth)[0]
             # methylated_cs = np.where(self.__getattr__('methylated', filter_pos_ix, return_np=True) == 1)[0]
-            return(np.divide(float(np.sum(mc_count[methylated_cs])), np.sum(mc_total[methylated_cs])))
+            sum_total = np.sum(mc_total[methylated_cs])
+            return((np.divide(float(np.sum(mc_count[methylated_cs])), sum_total), sum_total))
         elif category == 2: # fraction of methylated positions
             methylated = self.__getattr__('methylated', filter_pos_ix, return_np=True)
             meths_len = np.sum(methylated)
-            return(float(meths_len)/len(filter_pos_ix))
+            return((float(meths_len)/len(filter_pos_ix), len(filter_pos_ix)))
         elif category == 3: ## absolute means
-            return(np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)))
+            return((np.mean(np.divide(np.array(mc_count, dtype="float"), mc_total)), mc_total))
         elif category == 4:  ### weighted mean but without making correction for converion.
-            return(np.divide(float(np.sum(mc_count)), np.sum(mc_total)))
+            return((np.divide(float(np.sum(mc_count)), np.sum(mc_total)), np.sum(mc_total) ))
         else:
             raise(NotImplementedError)
 
@@ -372,13 +373,7 @@ class HDF5MethTable(object):
         cg_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "CG[ATGC]" )
         chg_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "C[ATC]G" )
         chh_meth = self.MethylationSummaryStats( filter_pos_ix, category=category, req_context = "C[ATC][ATC]" )
-        return( (cg_meth, chg_meth, chh_meth) )
-
-    def _TotalCounts_All_Contexts(self, filter_pos_ix):
-        t_count_cg = self.get_req_mc_class_ix("CG[ATGC]", filter_pos_ix)
-        t_count_chg = self.get_req_mc_class_ix("C[ATC]G", filter_pos_ix)
-        t_count_chh = self.get_req_mc_class_ix("C[ATC][ATC]", filter_pos_ix)
-        return( (t_count_cg, t_count_chg, t_count_chh) )
+        return( (cg_meth[0], chg_meth[0], chh_meth[0], cg_meth[1], chg_meth[1], chh_meth[1] ) )
 
     def generate_meth_average_in_windows(self, out_file, window_size, category=1):
         ## Methylation category here by default is weighted average
@@ -391,11 +386,10 @@ class HDF5MethTable(object):
             count = 0
             log.info("analyzing %s" % echr)
             for ewin in self_windows:
-                t_count = self._TotalCounts_All_Contexts( ewin[1] )
                 req_meth_avg = self._AveMethylation_All_Contexts(ewin[1], category)
-                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[0], len(t_count[0])))
-                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[1], len(t_count[1])))
-                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[2], len(t_count[2])))
+                outmeths_cg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[0], req_meth_avg[3]))
+                outmeths_chg_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[1], req_meth_avg[4]))
+                outmeths_chh_avg.write("%s\t%s\t%s\t%s\t%s\n" % (echr, ewin[0][0], ewin[0][1], req_meth_avg[2], req_meth_avg[5]))
                 count = count + 1
                 if count % 5000 == 0:
                     log.info("progress: analysed %s windows" % count)
@@ -463,7 +457,7 @@ class HDF5MethTable(object):
                 t_gene_exons.loc[ i.id, 'end' ] = i.end
         t_gene_exons['start'] = t_gene_exons['start'].astype(int)
         t_gene_exons['end'] = t_gene_exons['end'].astype(int)
-        all_gene_meths = pd.DataFrame( columns=['cg','chg', 'chh'], index = gene_id )
+        all_gene_meths = pd.DataFrame( columns=['cg','chg', 'chh', 'ncg', 'nchg', 'nchh'], index = gene_id )
         cg_gene_meths = pd.concat([gene_start_end, pd.DataFrame( columns=['cg','ncg'], index = gene_id )], axis = 1)
         chg_gene_meths = pd.concat([gene_start_end, pd.DataFrame( columns=['chg','nchg'], index = gene_id )], axis = 1)
         chh_gene_meths = pd.concat([gene_start_end, pd.DataFrame( columns=['chh','nchh'], index = gene_id )], axis = 1)
@@ -476,11 +470,10 @@ class HDF5MethTable(object):
                     t_gene_cds_pos_ix = np.append(t_gene_cds_pos_ix, self.get_filter_inds( ef_exon[1].values[0:3] ))
                 t_gene_cds_pos_ix = np.unique(t_gene_cds_pos_ix)
                 ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
-                ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
                 all_gene_meths.loc[ef_gene,:] = ef_gene_meths
-                cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths_counts[0]]
-                chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
-                chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
+                cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths[3]]
+                chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths[4]]
+                chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths[5]]
         else: 
             all_genes_cds_pos_ix = self.get_filter_inds( t_gene_exons, return_full_dataframe = True )
             for ef_gene in gene_id:
@@ -493,11 +486,10 @@ class HDF5MethTable(object):
                         'query_ix'
                     ].values)
                 ef_gene_meths = list(self._AveMethylation_All_Contexts(t_gene_cds_pos_ix, 1))
-                ef_gene_meths_counts = list(map(len, self._TotalCounts_All_Contexts( t_gene_cds_pos_ix )))
                 all_gene_meths.loc[ef_gene,:] = ef_gene_meths
-                cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths_counts[0]]
-                chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths_counts[1]]
-                chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths_counts[2]]
+                cg_gene_meths.loc[ ef_gene, ['cg', 'ncg'] ] = [ef_gene_meths[0], ef_gene_meths[3]]
+                chg_gene_meths.loc[ ef_gene, ['chg', 'nchg'] ] = [ef_gene_meths[1], ef_gene_meths[4]]
+                chh_gene_meths.loc[ ef_gene, ['chh', 'nchh'] ] = [ef_gene_meths[2], ef_gene_meths[5]]
         if out_file is not None:
             cg_gene_meths.to_csv( out_file + ".CG.bg", sep = "\t", index = False, header = None )
             chg_gene_meths.to_csv( out_file + ".CHG.bg", sep = "\t", index = False, header = None )
